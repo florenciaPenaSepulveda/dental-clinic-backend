@@ -1,4 +1,4 @@
-Clinica Dental - Backend (Django)
+# dental-clinic-backend
 =================================
 
 Resumen
