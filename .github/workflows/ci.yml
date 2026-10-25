@@ -9,6 +9,9 @@ jobs:
   test:
     name: Pruebas con cobertura
     runs-on: ubuntu-latest
+    env:
+      DJANGO_SECRET_KEY: clave-solo-para-la-integracion-continua
+      ALLOWED_HOSTS: localhost
     steps:
       - uses: actions/checkout@v4
 
