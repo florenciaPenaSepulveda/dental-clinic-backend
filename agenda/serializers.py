@@ -1,15 +1,19 @@
 import logging
+import re
 
-from rest_framework import serializers
-from django.db import IntegrityError
-from django.db import transaction
-from .models import Atencion, ArchivoReserva, SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
-from django.core.mail import send_mail
 from django.conf import settings
+from django.core.mail import send_mail
+from django.db import IntegrityError, transaction
+from django.utils.formats import date_format
+from rest_framework import serializers
 
-from .utils import es_correo_de_ejemplo, normalizar_rut
+from .models import ArchivoReserva, Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
+from .utils import es_correo_de_ejemplo, horario_pasado, normalizar_rut
 
 logger = logging.getLogger(__name__)
+
+FORMATO_FECHA = r'l j \d\e F \d\e Y'
+TELEFONO = re.compile(r'\+?[0-9(][0-9 ()-]{6,18}[0-9]')
 
 
 class SlotAgendaSerializer(serializers.ModelSerializer):
@@ -31,165 +35,87 @@ class SlotDisponibilidadSerializer(SlotAgendaSerializer):
 
 class ReservaCreateSerializer(serializers.Serializer):
     slot = serializers.PrimaryKeyRelatedField(queryset=SlotAgenda.objects.all(), required=False, allow_null=True)
-    paciente = serializers.IntegerField()
-    servicio = serializers.IntegerField(required=False)
-    
+    paciente = serializers.PrimaryKeyRelatedField(queryset=Paciente.objects.all())
+    servicio = serializers.PrimaryKeyRelatedField(queryset=Servicio.objects.all(), required=False, allow_null=True)
     dentista = serializers.IntegerField(required=False)
     fecha = serializers.DateField(required=False)
     hora_inicio = serializers.TimeField(required=False)
     motivo = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
-    def _send_confirmation_email(self, reserva: Reserva):
-        """Función privada para manejar el envío de correo."""
-        paciente = reserva.paciente
-        email_paciente = paciente.email
-        
-        if not email_paciente:
-            logger.info("Paciente %s sin email: se omite el correo de confirmación", paciente.pk)
-            return
-
-        if es_correo_de_ejemplo(email_paciente):
-            logger.info("Correo de ejemplo (%s): se omite el envío", email_paciente)
-            return
-
-        asunto = "Confirmación de Hora Agendada"
-        cuerpo_mensaje = f"""
-Estimado/a {paciente.nombre} {paciente.apellido},
-
-Su hora ha sido confirmada con éxito.
-
-Detalles de su cita:
-- Fecha: {reserva.slot.fecha}
-- Hora: {reserva.slot.hora}
-- Dentista: {reserva.slot.dentista}
-- Servicio: {reserva.slot.servicio}
-- Tipo: {'Sobrecupo' if reserva.sobrecupo else 'Normal'}
-
-Por favor, llegue 10 minutos antes.
-
-Atentamente,
-La Clínica Dental.
-"""
-        try:
-            send_mail(
-                asunto,
-                cuerpo_mensaje,
-                settings.DEFAULT_FROM_EMAIL,
-                [email_paciente],
-                fail_silently=False
-            )
-            logger.info("Correo de confirmación enviado para la reserva %s", reserva.pk)
-        except Exception as e:
-            logger.warning("No se pudo enviar el correo de la reserva %s: %s", reserva.pk, e)
-
-
     def validate(self, data):
-        if not data.get('slot'):
+        slot = data.get('slot')
+        if slot is None:
             if not all([data.get('dentista'), data.get('fecha'), data.get('hora_inicio')]):
-                raise serializers.ValidationError(
-                    "Se debe proporcionar 'slot' o los campos 'dentista', 'fecha' y 'hora_inicio'"
-                )
+                raise serializers.ValidationError("Se debe proporcionar 'slot' o los campos 'dentista', 'fecha' y 'hora_inicio'")
+            slot = SlotAgenda.objects.filter(dentista_id=data['dentista'], fecha=data['fecha'], hora=data['hora_inicio']).first()
+            if slot is None:
+                raise serializers.ValidationError('No existe un horario disponible en esa fecha y hora.')
+            data['slot'] = slot
+        if horario_pasado(slot.fecha, slot.hora):
+            raise serializers.ValidationError('Ese horario ya pasó. Elige otro.')
         return data
 
+    def _es_sobrecupo(self, slot):
+        if slot.reservas.count() < slot.capacidad:
+            return False
+        dentista = slot.dentista
+        sobrecupos_del_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=slot.fecha, sobrecupo=True).count()
+        if slot.reservas.filter(sobrecupo=True).count() < slot.max_overbook and sobrecupos_del_dia < dentista.max_overbook_day:
+            return True
+        raise serializers.ValidationError({'detail': 'El slot está lleno y no se permiten sobrecupos adicionales.'})
+
     def create(self, validated_data):
-        dentista_id = validated_data.pop('dentista', None)
-        fecha = validated_data.pop('fecha', None)
-        hora_inicio = validated_data.pop('hora_inicio', None)
-        motivo = validated_data.pop('motivo', '')
+        slot = validated_data['slot']
+        paciente = validated_data['paciente']
         self.reutilizada = False
-        
-        paciente_data = validated_data.get('paciente')
-        servicio_id = validated_data.get('servicio')
-        
-        if isinstance(paciente_data, Paciente):
-            paciente = paciente_data
-        else:
-            try:
-                paciente_id = int(paciente_data) if paciente_data else None
-                if not paciente_id:
-                    raise serializers.ValidationError("ID de paciente es requerido")
-                paciente = Paciente.objects.get(id=paciente_id)
-            except (ValueError, TypeError):
-                raise serializers.ValidationError(f"ID de paciente inválido: {paciente_data}")
-            except Paciente.DoesNotExist:
-                raise serializers.ValidationError(f"Paciente con ID {paciente_id} no existe")
-        
-        servicio = None
-        if servicio_id:
-            if isinstance(servicio_id, Servicio):
-                servicio = servicio_id
-            else:
-                try:
-                    servicio_id_int = int(servicio_id)
-                    servicio = Servicio.objects.get(id=servicio_id_int)
-                except (ValueError, TypeError):
-                    raise serializers.ValidationError(f"ID de servicio inválido: {servicio_id}")
-                except Servicio.DoesNotExist:
-                    raise serializers.ValidationError(f"Servicio con ID {servicio_id} no existe")
-        
-        slot = validated_data.get('slot')
-        if not slot and dentista_id and fecha and hora_inicio:
-            try:
-                dentista = Dentista.objects.get(id=dentista_id)
-                
-                slot, created = SlotAgenda.objects.get_or_create(
-                    dentista=dentista,
-                    fecha=fecha,
-                    hora=hora_inicio,
-                    defaults={
-                        'servicio': servicio,
-                        'capacidad': 1,
-                        'max_overbook': 0
-                    }
+        try:
+            with transaction.atomic():
+                existente = Reserva.objects.filter(slot=slot, paciente=paciente).first()
+                if existente:
+                    self.reutilizada = True
+                    return existente
+                reserva = Reserva.objects.create(
+                    slot=slot,
+                    paciente=paciente,
+                    servicio=validated_data.get('servicio'),
+                    motivo=validated_data.get('motivo', ''),
+                    sobrecupo=self._es_sobrecupo(slot),
                 )
-            except Dentista.DoesNotExist:
-                raise serializers.ValidationError(f"Dentista con ID {dentista_id} no existe")
-        
-        if not slot:
-            raise serializers.ValidationError("No se pudo crear o encontrar un slot válido")
-        
-        
-        with transaction.atomic():
-            existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
-            if existing_reserva:
-                self._send_confirmation_email(existing_reserva)
-                self.reutilizada = True
-                return existing_reserva
-            
-            reservas_actuales = slot.reservas.select_for_update().count()
-            if reservas_actuales < slot.capacidad:
-                try:
-                    reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False, motivo=motivo)
-                    self._send_confirmation_email(reserva)
-                    return reserva
-                except IntegrityError:
-                    existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
-                    if existing_reserva:
-                        self._send_confirmation_email(existing_reserva)
-                        self.reutilizada = True
-                        return existing_reserva
-                    raise
+        except IntegrityError:
+            self.reutilizada = True
+            return Reserva.objects.get(slot=slot, paciente=paciente)
+        self._enviar_confirmacion(reserva)
+        return reserva
 
-            sobrecupos_actuales_slot = slot.reservas.filter(sobrecupo=True).count()
-            if sobrecupos_actuales_slot < slot.max_overbook:
-                fecha = slot.fecha
-                dentista = slot.dentista
-                sobrecupos_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=fecha, sobrecupo=True).count()
-                if sobrecupos_dia < dentista.max_overbook_day:
-                    try:
-                        reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True, motivo=motivo)
-                        self._send_confirmation_email(reserva)
-                        return reserva
-                    except IntegrityError:
-                        existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
-                        if existing_reserva:
-                            self._send_confirmation_email(existing_reserva)
-                            self.reutilizada = True
-                            return existing_reserva
-                        raise
-
-            from rest_framework import serializers as drf_serializers
-            raise drf_serializers.ValidationError({'detail': 'El slot está lleno y no se permiten sobrecupos adicionales.'})
+    def _enviar_confirmacion(self, reserva):
+        paciente = reserva.paciente
+        if not paciente.email:
+            logger.info("Paciente %s sin email: se omite el correo de confirmación", paciente.pk)
+            return
+        if es_correo_de_ejemplo(paciente.email):
+            logger.info("Correo de ejemplo (%s): se omite el envío", paciente.email)
+            return
+        slot = reserva.slot
+        dentista = slot.dentista
+        fecha = date_format(slot.fecha, FORMATO_FECHA)
+        lineas = [
+            f"Estimado/a {paciente.nombre} {paciente.apellido},",
+            "",
+            "Su hora fue confirmada.",
+            "",
+            f"Fecha: {fecha}",
+            f"Hora: {slot.hora:%H:%M}",
+            f"Dentista: {dentista.nombre} {dentista.apellido}" + (f" ({dentista.especialidad})" if dentista.especialidad else ""),
+            f"Servicio: {reserva.servicio.nombre if reserva.servicio else 'Por definir en la consulta'}",
+        ]
+        if reserva.sobrecupo:
+            lineas.append("Tipo: sobrecupo (se atenderá según la disponibilidad del dentista)")
+        lineas += ["", "Por favor, llegue 10 minutos antes de su hora.", "", "Atentamente,", "Clínica Dental"]
+        try:
+            send_mail("Confirmación de hora agendada", "\n".join(lineas), settings.DEFAULT_FROM_EMAIL, [paciente.email], fail_silently=False)
+            logger.info("Correo de confirmación enviado para la reserva %s", reserva.pk)
+        except Exception as error:
+            logger.warning("No se pudo enviar el correo de la reserva %s: %s", reserva.pk, error)
 
 
 class RegionSerializer(serializers.ModelSerializer):
@@ -227,6 +153,12 @@ class PacienteSerializer(serializers.ModelSerializer):
     def get_tiene_cuenta(self, paciente):
         return paciente.usuario_id is not None
 
+    def validate_telefono(self, value):
+        valor = value.strip()
+        if valor and not TELEFONO.fullmatch(valor):
+            raise serializers.ValidationError('Ingresa un teléfono válido (números, espacios, + y guiones).')
+        return valor
+
     def validate_rut(self, value):
         rut = normalizar_rut(value)
         if rut is None:
@@ -240,7 +172,6 @@ class PacienteSerializer(serializers.ModelSerializer):
 
 
 class ReservaReadSerializer(serializers.ModelSerializer):
-    """Serializer para lectura de reservas con información detallada"""
     slot = SlotAgendaSerializer(read_only=True)
     paciente = PacienteSerializer(read_only=True)
     servicio = ServicioSerializer(read_only=True)
