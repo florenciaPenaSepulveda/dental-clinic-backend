@@ -1,4 +1,5 @@
 from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from .models import Paciente
@@ -51,6 +52,7 @@ class PacienteRutApiTests(APITestCase):
         self.assertEqual(Paciente.objects.count(), 1)
 
     def test_editar_el_propio_rut_no_cuenta_como_repetido(self):
+        self.client.force_authenticate(get_user_model().objects.create_user('personal', password='clave-segura-123', is_staff=True))
         respuesta = self.client.patch(f"{BASE}/{self.paciente.id}/", {"rut": "12345678-5", "telefono": "999"}, format="json")
         self.assertEqual(respuesta.status_code, 200)
         self.assertEqual(respuesta.json()["telefono"], "999")

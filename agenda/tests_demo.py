@@ -1,6 +1,7 @@
 import datetime
 from io import StringIO
 
+from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -25,6 +26,13 @@ class DatosDeDemostracionTests(TestCase):
         self.assertEqual(self.resumen["pacientes"], 24)
         self.assertGreater(self.resumen["slots"], 500)
         self.assertGreater(self.resumen["reservas"], 30)
+
+    def test_crea_un_usuario_de_personal_una_sola_vez(self):
+        cargar_demo(hoy=LUNES)
+        usuarios = get_user_model().objects.filter(username="recepcion")
+        self.assertEqual(usuarios.count(), 1)
+        self.assertTrue(usuarios.get().is_staff)
+        self.assertTrue(usuarios.get().check_password("recepcion123"))
 
     def test_es_idempotente(self):
         reservas = Reserva.objects.count()

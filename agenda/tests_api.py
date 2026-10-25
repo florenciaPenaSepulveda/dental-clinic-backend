@@ -5,6 +5,7 @@ from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import TestCase, override_settings
 from django.utils import timezone
+from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from .models import Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
@@ -12,6 +13,12 @@ from .slots_generator import generate_slots_for_day, generate_slots_range
 
 BASE = "/agenda"
 MANANA = timezone.localdate() + datetime.timedelta(days=1)
+
+
+def autenticar_personal(cliente):
+    usuario = get_user_model().objects.create_user("personal", password="clave-segura-123", is_staff=True)
+    cliente.force_authenticate(usuario)
+    return usuario
 
 
 def crear_dentista(**extra):
@@ -86,6 +93,9 @@ class GeneradorDeSlotsTests(TestCase):
 
 
 class CatalogosApiTests(APITestCase):
+    def setUp(self):
+        autenticar_personal(self.client)
+
     def test_crud_de_regiones_servicios_y_pacientes(self):
         region = self.client.post(f"{BASE}/api/regiones/", {"nombre": "Ñuble", "codigo": "16"}, format="json")
         self.assertEqual(region.status_code, 201)
@@ -128,6 +138,7 @@ class CatalogosApiTests(APITestCase):
 
 class SlotsApiTests(APITestCase):
     def setUp(self):
+        autenticar_personal(self.client)
         self.dentista = crear_dentista()
 
     def test_lista_solo_slots_desde_hoy(self):
@@ -236,6 +247,7 @@ class ReservasApiTests(APITestCase):
         self.assertEqual(sin_dentista.status_code, 400)
 
     def test_viewset_crea_lista_y_filtra(self):
+        autenticar_personal(self.client)
         creada = self.client.post(f"{BASE}/api/reservas/", {"slot": self.slot.id, "paciente": self.paciente.id}, format="json")
         self.assertEqual(creada.status_code, 201)
         self.assertTrue(creada.json()["created"])

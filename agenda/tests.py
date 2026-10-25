@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -39,6 +40,7 @@ class GenerateSlotsTest(TestCase):
     def setUp(self):
         self.client = APIClient()
         self.dentista = Dentista.objects.create(nombre='Carlos', apellido='Ruiz')
+        self.client.force_authenticate(get_user_model().objects.create_user('personal', password='clave-segura-123', is_staff=True))
 
     def test_generate_slots_endpoint(self):
         url = reverse('generar-slots', kwargs={'dentista_id': self.dentista.id})
@@ -114,5 +116,6 @@ class AgendaExtraTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_listar_pacientes(self):
+        self.client.force_authenticate(get_user_model().objects.create_user('personal', password='clave-segura-123', is_staff=True))
         r = self.client.get('/agenda/api/pacientes/')
         self.assertEqual(r.status_code, 200)
