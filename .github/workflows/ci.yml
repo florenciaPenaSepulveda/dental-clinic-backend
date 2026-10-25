@@ -29,3 +29,12 @@ jobs:
         run: |
           python -m coverage run manage.py test
           python -m coverage report --fail-under=80
+
+  docker:
+    name: Construcción de la imagen Docker
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Construir la imagen
+        run: docker build -t clinica-dental-backend .
