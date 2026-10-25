@@ -14,6 +14,15 @@ def env_list(value, default=''):
     return [item.strip() for item in raw.split(',') if item.strip()]
 
 
+def resolve_allowed_hosts(debug, environ):
+    hosts = env_list(environ.get('ALLOWED_HOSTS'))
+    if hosts:
+        return hosts
+    if debug:
+        return ['*']
+    raise ImproperlyConfigured('ALLOWED_HOSTS es obligatoria cuando DEBUG está desactivado.')
+
+
 def resolve_secret_key(debug, environ):
     key = environ.get('DJANGO_SECRET_KEY', '').strip()
     if key:

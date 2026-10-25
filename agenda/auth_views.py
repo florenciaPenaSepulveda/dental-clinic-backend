@@ -7,6 +7,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .autenticacion import token_vencido
 from .models import ClaveTemporal, Paciente
 from .permissions import DENTISTA, PACIENTE, EsUsuarioDelSistema, debe_cambiar_clave, rol_base
 from .throttles import LoginThrottle
@@ -31,7 +32,12 @@ def datos_de_sesion(usuario):
 
 
 def respuesta_de_sesion(usuario):
-    token, _ = Token.objects.get_or_create(user=usuario)
+    token = Token.objects.filter(user=usuario).first()
+    if token is not None and token_vencido(token):
+        token.delete()
+        token = None
+    if token is None:
+        token = Token.objects.create(user=usuario)
     return Response({**datos_de_sesion(usuario), 'token': token.key})
 
 
