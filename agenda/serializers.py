@@ -21,6 +21,14 @@ class SlotAgendaSerializer(serializers.ModelSerializer):
         fields = ('id', 'dentista', 'servicio', 'fecha', 'hora', 'capacidad', 'max_overbook')
 
 
+class SlotDisponibilidadSerializer(SlotAgendaSerializer):
+    reservas_count = serializers.IntegerField(read_only=True)
+    sobrecupos_count = serializers.IntegerField(read_only=True)
+
+    class Meta(SlotAgendaSerializer.Meta):
+        fields = SlotAgendaSerializer.Meta.fields + ('reservas_count', 'sobrecupos_count')
+
+
 class ReservaCreateSerializer(serializers.Serializer):
     slot = serializers.PrimaryKeyRelatedField(queryset=SlotAgenda.objects.all(), required=False, allow_null=True)
     paciente = serializers.IntegerField()

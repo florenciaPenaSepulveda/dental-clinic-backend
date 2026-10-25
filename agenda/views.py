@@ -2,9 +2,11 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
 from .models import SlotAgenda, Reserva, Dentista
-from .serializers import SlotAgendaSerializer, ReservaCreateSerializer
+from .permissions import IsStaff
+from .serializers import SlotAgendaSerializer, SlotDisponibilidadSerializer, ReservaCreateSerializer
 from django.utils import timezone
-from rest_framework.decorators import api_view
+from django.db.models import Count, Q
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework import status
 from rest_framework.response import Response
 
@@ -30,6 +32,7 @@ class CrearReserva(generics.CreateAPIView):
 
 
 @api_view(['POST'])
+@permission_classes([IsStaff])
 def generar_slots(request, dentista_id):
     """Genera slots usando la lógica centralizada en `slots_generator`.
     body:
@@ -82,7 +85,10 @@ def slots_por_fecha(request):
     import datetime
     fecha = request.GET.get('fecha')
     dentista_id = request.GET.get('dentista_id')
-    qs = SlotAgenda.objects.all()
+    qs = SlotAgenda.objects.annotate(
+        reservas_count=Count('reservas'),
+        sobrecupos_count=Count('reservas', filter=Q(reservas__sobrecupo=True)),
+    )
     if fecha:
         try:
             fecha_obj = datetime.datetime.strptime(fecha, '%Y-%m-%d').date()
@@ -91,5 +97,5 @@ def slots_por_fecha(request):
             return Response({'detail': 'Formato de fecha inválido. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
     if dentista_id:
         qs = qs.filter(dentista_id=dentista_id)
-    serializer = SlotAgendaSerializer(qs.order_by('hora'), many=True)
+    serializer = SlotDisponibilidadSerializer(qs.order_by('hora'), many=True)
     return Response(serializer.data)

@@ -1,29 +1,24 @@
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import SAFE_METHODS, BasePermission, AllowAny
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from .models import Dentista, Servicio, Paciente, Region, Reserva
+from .permissions import IsStaff, IsStaffOrReadOnly
+from .throttles import BuscarThrottle
 from .utils import normalizar_rut
 from .serializers import DentistaSerializer, ServicioSerializer, PacienteSerializer, RegionSerializer, ReservaCreateSerializer, ReservaReadSerializer
-
-
-class IsStaffOrReadOnly(BasePermission):
-    def has_permission(self, request, view):
-        if request.method in SAFE_METHODS:
-            return True
-        return bool(request.user and request.user.is_staff)
 
 
 class RegionViewSet(viewsets.ModelViewSet):
     queryset = Region.objects.all()
     serializer_class = RegionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsStaffOrReadOnly]
 
 
 class DentistaViewSet(viewsets.ModelViewSet):
     queryset = Dentista.objects.select_related('region').all()
     serializer_class = DentistaSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsStaffOrReadOnly]
     
     def get_queryset(self):
         queryset = self.queryset.all()
@@ -36,15 +31,19 @@ class DentistaViewSet(viewsets.ModelViewSet):
 class ServicioViewSet(viewsets.ModelViewSet):
     queryset = Servicio.objects.all()
     serializer_class = ServicioSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsStaffOrReadOnly]
 
 
 class PacienteViewSet(viewsets.ModelViewSet):
     queryset = Paciente.objects.all()
     serializer_class = PacienteSerializer
-    permission_classes = [AllowAny]
 
-    @action(detail=False, methods=['get'])
+    def get_permissions(self):
+        if self.action in ('create', 'buscar'):
+            return [AllowAny()]
+        return [IsStaff()]
+
+    @action(detail=False, methods=['get'], throttle_classes=[BuscarThrottle])
     def buscar(self, request):
         rut = normalizar_rut(request.query_params.get('rut', ''))
         if rut is None:
@@ -57,8 +56,12 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
 class ReservaViewSet(viewsets.ModelViewSet):
     queryset = Reserva.objects.select_related('slot', 'slot__dentista', 'paciente', 'servicio').all()
-    permission_classes = [AllowAny]
-    
+
+    def get_permissions(self):
+        if self.action == 'create':
+            return [AllowAny()]
+        return [IsStaff()]
+
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return ReservaCreateSerializer
