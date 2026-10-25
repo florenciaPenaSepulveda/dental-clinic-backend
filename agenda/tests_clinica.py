@@ -477,6 +477,64 @@ class CuentasTests(ClinicaBase):
         self.assertIsNotNone(sin_cuenta.id)
 
 
+class ClaveTemporalTests(ClinicaBase):
+    def crear_cuenta(self):
+        nuevo = Dentista.objects.create(nombre="Sofía", apellido="Núñez")
+        self.como(self.recepcion)
+        datos = self.client.post(f"{BASE}/api/dentistas/{nuevo.id}/cuenta/").json()
+        self.client.force_authenticate(None)
+        return datos
+
+    def ingresar(self, datos):
+        sesion = self.client.post(f"{BASE}/auth/login/", {"username": datos["username"], "password": datos["password"]}, format="json").json()
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {sesion['token']}")
+        return sesion
+
+    def test_el_primer_ingreso_exige_cambiar_la_clave(self):
+        sesion = self.ingresar(self.crear_cuenta())
+        self.assertTrue(sesion["debe_cambiar_clave"])
+        self.assertEqual(sesion["rol"], "dentista")
+
+    def test_mientras_no_la_cambie_solo_puede_cambiarla_o_salir(self):
+        self.ingresar(self.crear_cuenta())
+        for ruta in ("/api/pacientes/", "/api/reservas/", "/semana/?desde=2026-01-05"):
+            self.assertEqual(self.client.get(f"{BASE}{ruta}").status_code, 403, ruta)
+        self.assertEqual(self.client.post(f"{BASE}/api/servicios/", {}, format="json").status_code, 403)
+        self.assertEqual(self.client.get(f"{BASE}/auth/me/").json()["debe_cambiar_clave"], True)
+        self.assertEqual(self.client.get(f"{BASE}/api/dentistas/").status_code, 200)
+
+    def test_al_cambiar_la_clave_recupera_el_acceso(self):
+        datos = self.crear_cuenta()
+        self.ingresar(datos)
+        respuesta = self.client.post(f"{BASE}/auth/cambiar-clave/", {"actual": datos["password"], "nueva": "Mi-clave-personal-26"}, format="json")
+        self.assertEqual(respuesta.status_code, 200)
+        self.assertFalse(respuesta.json()["debe_cambiar_clave"])
+        self.client.credentials(HTTP_AUTHORIZATION=f"Token {respuesta.json()['token']}")
+        self.assertEqual(self.client.get(f"{BASE}/api/pacientes/").status_code, 200)
+
+    def test_no_acepta_conservar_la_clave_temporal(self):
+        datos = self.crear_cuenta()
+        self.ingresar(datos)
+        respuesta = self.client.post(f"{BASE}/auth/cambiar-clave/", {"actual": datos["password"], "nueva": datos["password"]}, format="json")
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn("distinta", respuesta.json()["detail"])
+
+    def test_restablecer_el_acceso_vuelve_a_exigir_el_cambio(self):
+        self.client.force_authenticate(self.recepcion)
+        datos = self.client.post(f"{BASE}/api/dentistas/{self.dentista.id}/cuenta/").json()
+        self.client.force_authenticate(None)
+        self.assertTrue(self.ingresar(datos)["debe_cambiar_clave"])
+
+    def test_las_cuentas_normales_no_tienen_la_marca(self):
+        sesion = self.client.post(f"{BASE}/auth/login/", {"username": "dr.perez", "password": CLAVE}, format="json").json()
+        self.assertFalse(sesion["debe_cambiar_clave"])
+
+    def test_activar_la_propia_cuenta_no_exige_cambio(self):
+        nuevo = Paciente.objects.create(rut="13.333.333-9", nombre="Rosa", apellido="Vega", email="rosa@test.cl")
+        respuesta = self.client.post(f"{BASE}/auth/activar-cuenta/", {"rut": nuevo.rut, "email": "rosa@test.cl", "password": "Clave-muy-segura-9"}, format="json")
+        self.assertFalse(respuesta.json()["debe_cambiar_clave"])
+
+
 class CambiarClaveTests(ClinicaBase):
     def cambiar(self, actual=CLAVE, nueva="Otra-clave-segura-7"):
         return self.client.post(f"{BASE}/auth/cambiar-clave/", {"actual": actual, "nueva": nueva}, format="json")
