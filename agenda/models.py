@@ -44,7 +44,8 @@ class Dentista(models.Model):
         ordering = ['apellido', 'nombre']
 
     def __str__(self):
-        return f"{self.nombre} {self.apellido} - {self.especialidad}"
+        base = f"{self.nombre} {self.apellido}"
+        return f"{base} - {self.especialidad}" if self.especialidad else base
 
 
 class Servicio(models.Model):
