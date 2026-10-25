@@ -53,16 +53,18 @@ Aplica las migraciones al iniciar y guarda la base en un volumen. Disponible en 
 
 ## Variables de entorno
 
-Todas son opcionales; sin ellas se usan valores de desarrollo. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
+Todas son opcionales mientras `DEBUG` esté activo; sin ellas se usan valores de desarrollo. Con `DEBUG=False` (producción) `DJANGO_SECRET_KEY` es obligatoria y el servidor no arranca sin ella. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
 
 | Variable | Descripción |
 |---|---|
-| `DJANGO_SECRET_KEY` | Clave secreta de Django (cámbiala en producción) |
+| `DJANGO_SECRET_KEY` | Clave secreta de Django (obligatoria con `DEBUG=False`) |
 | `DEBUG` | `True` o `False` |
 | `ALLOWED_HOSTS` | Hosts permitidos separados por coma |
 | `SQLITE_PATH` | Ruta del archivo de base de datos |
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
 | `DEFAULT_FROM_EMAIL` | Remitente de los correos |
+
+Django no lee `.env` por sí solo: `settings.py` lo carga con `python-dotenv` y nunca pisa variables que ya existan en el entorno. En desarrollo basta el archivo `.env`; en producción se definen variables de entorno reales en el servidor o en la plataforma de despliegue (Render, Docker, etc.) y no se despliega ningún `.env`.
 
 ### Envío de correos
 
