@@ -1,3 +1,6 @@
+import uuid
+
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
@@ -22,6 +25,7 @@ class Paciente(models.Model):
     telefono = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     fecha_registro = models.DateTimeField(auto_now_add=True)
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='paciente_perfil')
 
     class Meta:
         ordering = ['apellido', 'nombre']
@@ -39,6 +43,7 @@ class Dentista(models.Model):
     telefono = models.CharField(max_length=20, blank=True)
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name='dentistas', null=True, blank=True)
     max_overbook_day = models.PositiveIntegerField(default=0, help_text='Máximo de sobrecupos permitidos por día para este dentista')
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='dentista_perfil')
 
     class Meta:
         ordering = ['apellido', 'nombre']
@@ -104,15 +109,52 @@ class SlotAgenda(models.Model):
 
 
 class Reserva(models.Model):
+    ESTADOS = [('pendiente', 'Pendiente'), ('atendida', 'Atendida'), ('no_asistio', 'No asistió')]
+
     """Reserva asociada a un `SlotAgenda` y a un `Paciente`. Campo `sobrecupo` indica si fue overbook."""
     slot = models.ForeignKey(SlotAgenda, on_delete=models.CASCADE, related_name='reservas')
     paciente = models.ForeignKey(Paciente, on_delete=models.CASCADE, related_name='reservas')
     servicio = models.ForeignKey(Servicio, on_delete=models.SET_NULL, null=True, blank=True)
     creado_en = models.DateTimeField(auto_now_add=True)
     sobrecupo = models.BooleanField(default=False)
+    estado = models.CharField(max_length=20, choices=ESTADOS, default='pendiente')
+    motivo = models.TextField(blank=True)
+    observaciones = models.TextField(blank=True)
 
     class Meta:
         unique_together = ('slot', 'paciente')
 
     def __str__(self):
         return f"Reserva {self.paciente} -> {self.slot} {'(Sobrecupo)' if self.sobrecupo else ''}"
+
+
+def ruta_archivo(instance, nombre):
+    extension = nombre.rsplit('.', 1)[-1].lower() if '.' in nombre else 'bin'
+    return f"reservas/{instance.reserva_id}/{uuid.uuid4().hex}.{extension}"
+
+
+class ArchivoReserva(models.Model):
+    reserva = models.ForeignKey(Reserva, on_delete=models.CASCADE, related_name='archivos')
+    archivo = models.FileField(upload_to=ruta_archivo)
+    nombre = models.CharField(max_length=255)
+    tipo = models.CharField(max_length=100)
+    tamano = models.PositiveIntegerField()
+    subido_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['subido_en']
+
+    def __str__(self):
+        return self.nombre
+
+
+class Atencion(models.Model):
+    reserva = models.OneToOneField(Reserva, on_delete=models.CASCADE, related_name='atencion')
+    diagnostico = models.TextField(blank=True)
+    procedimiento = models.TextField(blank=True)
+    indicaciones = models.TextField(blank=True)
+    creado_en = models.DateTimeField(auto_now_add=True)
+    actualizado_en = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Atención de {self.reserva.paciente}"
