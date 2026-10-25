@@ -41,7 +41,7 @@ class AutenticacionTests(APITestCase):
     def test_el_token_da_acceso_y_cerrar_sesion_lo_invalida(self):
         token = self.login().json()["token"]
         self.client.credentials(HTTP_AUTHORIZATION=f"Token {token}")
-        self.assertEqual(self.client.get(f"{BASE}/auth/me/").json(), {"username": "recepcion"})
+        self.assertEqual(self.client.get(f"{BASE}/auth/me/").json()["rol"], "recepcion")
         self.assertEqual(self.client.get(f"{BASE}/api/pacientes/").status_code, 200)
         self.assertEqual(self.client.post(f"{BASE}/auth/logout/").status_code, 204)
         self.assertEqual(self.client.get(f"{BASE}/api/pacientes/").status_code, 401)
