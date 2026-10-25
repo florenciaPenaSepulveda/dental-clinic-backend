@@ -120,7 +120,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-129 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+130 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
