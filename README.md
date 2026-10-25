@@ -1,5 +1,7 @@
 # Clínica Dental · Backend
 
+[![CI](https://github.com/florenciaPenaSepulveda/dental-clinic-backend/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/florenciaPenaSepulveda/dental-clinic-backend/actions/workflows/ci.yml)
+
 API REST para la gestión de agenda de una clínica dental: dentistas, servicios, pacientes, horarios (slots) y reservas con control de sobrecupo y correo de confirmación.
 
 Construida con **Django 4.2**, **Django REST Framework** y SQLite.
