@@ -63,6 +63,7 @@ Todas son opcionales mientras `DEBUG` esté activo; sin ellas se usan valores de
 | `SQLITE_PATH` | Ruta del archivo de base de datos |
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
 | `DEFAULT_FROM_EMAIL` | Remitente de los correos |
+| `DEMO_STAFF_PASSWORD` | Contraseña del usuario `recepcion` que crea `seed_data --demo` (por defecto `recepcion123`) |
 
 Django no lee `.env` por sí solo: `settings.py` lo carga con `python-dotenv` y nunca pisa variables que ya existan en el entorno. En desarrollo basta el archivo `.env`; en producción se definen variables de entorno reales en el servidor o en la plataforma de despliegue (Render, Docker, etc.) y no se despliega ningún `.env`.
 
@@ -85,7 +86,15 @@ Prefijo `/agenda/`.
 | `POST /dentistas/{id}/generar_slots/` | Genera horarios (`fecha`, `desde`, `hasta`, `dias`) |
 | `POST /reservas/` | Crea una reserva con `slot` o con `dentista`, `fecha` y `hora_inicio`, más `paciente` |
 | `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
+| `POST /auth/login/` | Inicia sesión del personal (`username`, `password`) y devuelve un token |
+| `POST /auth/logout/`, `GET /auth/me/` | Cierra la sesión / devuelve el usuario actual (requieren token) |
 | `/api/regiones/`, `/api/dentistas/`, `/api/servicios/`, `/api/pacientes/`, `/api/reservas/` | CRUD de cada recurso (`?region=` para dentistas; `?dentista=` y `?fecha=` para reservas) |
+
+### Acceso y permisos
+
+Las operaciones del público son: consultar dentistas, servicios y horarios (con la cantidad de reservas de cada horario, sin datos de pacientes), buscar un paciente por RUT, registrarse como paciente y reservar una hora. Todo lo demás exige un token de personal en la cabecera `Authorization: Token <token>`: listar, editar o eliminar pacientes, listar o cancelar reservas, generar horarios y modificar el catálogo. Un usuario sin `is_staff` no puede iniciar sesión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
+
+Crea una cuenta de personal con `python manage.py createsuperuser`. `seed_data --demo` crea además el usuario `recepcion` (contraseña `recepcion123`, o la de la variable `DEMO_STAFF_PASSWORD`), pensado solo para demostración.
 
 ## Pruebas
 
@@ -95,7 +104,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-71 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+85 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
