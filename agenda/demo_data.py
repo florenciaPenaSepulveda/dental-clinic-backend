@@ -1,6 +1,8 @@
 import datetime
+import os
 import random
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 
 from .models import Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
@@ -117,12 +119,25 @@ def _crear_reservas(rng, pacientes, servicios, hoy):
     return creadas
 
 
+USUARIO_DEMO = 'recepcion'
+
+
+def _crear_personal():
+    User = get_user_model()
+    usuario, creado = User.objects.get_or_create(username=USUARIO_DEMO, defaults={'is_staff': True})
+    if creado:
+        usuario.set_password(os.environ.get('DEMO_STAFF_PASSWORD', 'recepcion123'))
+        usuario.save()
+    return usuario
+
+
 @transaction.atomic
 def cargar_demo(hoy=None):
     rng = random.Random(2026)
     hoy = hoy or datetime.date.today()
     dentistas, servicios = _crear_catalogos(rng)
     pacientes = _crear_pacientes(rng)
+    _crear_personal()
     _crear_agenda(dentistas, hoy)
     reservas = _crear_reservas(rng, pacientes, servicios, hoy)
     return {

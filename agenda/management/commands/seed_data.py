@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from agenda.models import Dentista, Servicio, Paciente
-from agenda.demo_data import cargar_demo
+from agenda.demo_data import USUARIO_DEMO, cargar_demo
 from agenda.slots_generator import generate_slots_range
 from agenda.utils import rut_con_dv
 import datetime
@@ -26,6 +26,7 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Datos de demostración cargados:'))
             for nombre, cantidad in resumen.items():
                 self.stdout.write(f"  {nombre.capitalize()}: {cantidad}")
+            self.stdout.write(f"Usuario de personal de demostración: {USUARIO_DEMO}")
             return
 
         nd = options.get('dentistas')
