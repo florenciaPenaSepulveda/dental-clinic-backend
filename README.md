@@ -90,6 +90,8 @@ Prefijo `/agenda/`.
 | `POST /auth/login/` | Inicia sesión (`username` o RUT, `password`) y devuelve un token con el rol (`recepcion`, `dentista` o `paciente`) |
 | `POST /auth/activar-cuenta/` | Un paciente crea su cuenta con su RUT, el correo registrado en la clínica y una contraseña |
 | `POST /auth/logout/`, `GET /auth/me/` | Cierra la sesión / devuelve el usuario actual (requieren token) |
+| `POST /auth/cambiar-clave/` | Cambia la contraseña del usuario con sesión (`actual`, `nueva`) y devuelve un token nuevo |
+| `POST /api/dentistas/{id}/cuenta/`, `POST /api/pacientes/{id}/cuenta/` | Recepción crea la cuenta de acceso o restablece su contraseña; devuelve el usuario y una contraseña temporal |
 | `GET /semana/?desde=AAAA-MM-DD&dentista=1` | Horarios de 7 días con el detalle de sus reservas (personal) |
 | `PATCH /api/reservas/{id}/` | Cambia estado, observaciones, servicio o reprograma la reserva (personal) |
 | `POST /api/reservas/{id}/archivos/`, `GET/DELETE /archivos/{id}/` | Sube, descarga o elimina exámenes adjuntos |
@@ -110,7 +112,7 @@ Las operaciones del público son: consultar dentistas, servicios y horarios (con
 
 Las observaciones internas de una reserva solo las ven recepción y el dentista; el paciente ve el motivo, el diagnóstico, el procedimiento y las indicaciones. Los exámenes se guardan fuera de las rutas públicas y solo se descargan con sesión, por quien tiene acceso a esa reserva. Se aceptan PDF, JPG y PNG de hasta 5 MB, máximo 5 por reserva, y se comprueba que el contenido corresponda a la extensión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
 
-Crea una cuenta de recepción con `python manage.py createsuperuser`. Para un dentista o un paciente, crea el usuario en `/admin/` y enlázalo en el campo `usuario` de su ficha. `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
+Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez, y cada persona la cambia desde Mi cuenta. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
 
 ## Pruebas
 
@@ -120,7 +122,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-130 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+140 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
