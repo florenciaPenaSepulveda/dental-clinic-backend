@@ -112,8 +112,8 @@ class CatalogosApiTests(APITestCase):
         self.assertEqual(listado.status_code, 200)
         self.assertEqual(len(listado.json()), 1)
 
-        actualizado = self.client.patch(f"{BASE}/api/pacientes/{paciente.json()['id']}/", {"telefono": "999"}, format="json")
-        self.assertEqual(actualizado.json()["telefono"], "999")
+        actualizado = self.client.patch(f"{BASE}/api/pacientes/{paciente.json()['id']}/", {"telefono": "+56 9 1234 5678"}, format="json")
+        self.assertEqual(actualizado.json()["telefono"], "+56 9 1234 5678")
         eliminado = self.client.delete(f"{BASE}/api/pacientes/{paciente.json()['id']}/")
         self.assertEqual(eliminado.status_code, 204)
 
@@ -223,14 +223,22 @@ class ReservasApiTests(APITestCase):
         self.reservar(self.paciente)
         self.assertEqual(self.reservar(self.otro).status_code, 400)
 
-    def test_crea_el_slot_a_partir_de_dentista_fecha_y_hora(self):
-        respuesta = self.client.post(
-            f"{BASE}/reservas/",
-            {"paciente": self.paciente.id, "dentista": self.dentista.id, "fecha": MANANA.isoformat(), "hora_inicio": "11:00"},
-            format="json",
-        )
-        self.assertEqual(respuesta.status_code, 201)
-        self.assertTrue(SlotAgenda.objects.filter(dentista=self.dentista, hora=datetime.time(11, 0)).exists())
+    def test_reserva_buscando_el_horario_por_dentista_fecha_y_hora(self):
+        crear_slot(self.dentista, hora=datetime.time(11, 0))
+        datos = {"paciente": self.paciente.id, "dentista": self.dentista.id, "fecha": MANANA.isoformat(), "hora_inicio": "11:00"}
+        self.assertEqual(self.client.post(f"{BASE}/reservas/", datos, format="json").status_code, 201)
+
+    def test_no_crea_horarios_inexistentes_desde_el_publico(self):
+        datos = {"paciente": self.paciente.id, "dentista": self.dentista.id, "fecha": MANANA.isoformat(), "hora_inicio": "11:30"}
+        self.assertEqual(self.client.post(f"{BASE}/reservas/", datos, format="json").status_code, 400)
+        self.assertFalse(SlotAgenda.objects.filter(hora=datetime.time(11, 30)).exists())
+
+    def test_rechaza_horarios_que_ya_pasaron(self):
+        ayer = crear_slot(self.dentista, hora=datetime.time(12, 0), fecha=timezone.localdate() - datetime.timedelta(days=1))
+        respuesta = self.reservar(self.paciente, slot=ayer.id)
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertIn("ya pasó", str(respuesta.json()))
+        self.assertEqual(Reserva.objects.count(), 0)
 
     def test_valida_los_datos_de_entrada(self):
         sin_slot = self.client.post(f"{BASE}/reservas/", {"paciente": self.paciente.id}, format="json")

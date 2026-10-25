@@ -1,9 +1,11 @@
 import datetime
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.utils import timezone
 from rest_framework.authtoken.models import Token
+from rest_framework.throttling import SimpleRateThrottle
 from rest_framework.test import APITestCase
 
 from .models import Dentista, Paciente, Reserva, SlotAgenda
@@ -46,6 +48,7 @@ class AutenticacionTests(APITestCase):
         self.assertEqual(self.client.post(f"{BASE}/auth/logout/").status_code, 204)
         self.assertEqual(self.client.get(f"{BASE}/api/pacientes/").status_code, 401)
 
+    @mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'login': '20/min'})
     def test_limita_los_intentos_de_inicio_de_sesion(self):
         estados = [self.login(clave="mala").status_code for _ in range(25)]
         self.assertEqual(estados[0], 400)
@@ -79,6 +82,7 @@ class AccesoPublicoTests(APITestCase):
         creado = self.client.post(f"{BASE}/api/pacientes/", {"rut": "11.111.111-1", "nombre": "Ana", "apellido": "Ríos"}, format="json")
         self.assertEqual(creado.status_code, 201)
 
+    @mock.patch.dict(SimpleRateThrottle.THROTTLE_RATES, {'buscar': '60/min'})
     def test_limita_las_busquedas_por_rut(self):
         estados = [self.client.get(f"{BASE}/api/pacientes/buscar/", {"rut": "12.345.678-5"}).status_code for _ in range(65)]
         self.assertEqual(estados[0], 200)

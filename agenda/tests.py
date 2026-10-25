@@ -16,16 +16,12 @@ class ReservaCapacityTest(TestCase):
         self.slot = SlotAgenda.objects.create(
             dentista=self.dentista,
             servicio=self.servicio,
-            fecha=timezone.localdate(),
+            fecha=timezone.localdate() + timedelta(days=1),
             hora=time(10, 0),
             capacidad=1
         )
 
     def test_two_reservations_second_created_as_overbook(self):
-        """
-        Adaptado al nuevo comportamiento del backend:
-        Ahora permite crear sobrecupos sin error 400.
-        """
         url = reverse('crear-reserva')
         payload = {'slot': self.slot.id, 'paciente': self.paciente.id, 'servicio': self.servicio.id}
         r1 = self.client.post(url, payload, format='json')
@@ -59,7 +55,7 @@ class AgendaExtraTests(TestCase):
         self.slot = SlotAgenda.objects.create(
             dentista=self.dentista,
             servicio=self.servicio,
-            fecha=timezone.localdate(),
+            fecha=timezone.localdate() + timedelta(days=1),
             hora=time(9, 0),
             capacidad=1
         )
@@ -81,10 +77,6 @@ class AgendaExtraTests(TestCase):
         self.assertEqual(r.status_code, 200)
 
     def test_sobrecupo_permitido(self):
-        """
-        Ya no se espera error ni True forzado.
-        Solo verificamos que el segundo se cree correctamente.
-        """
         url = reverse('crear-reserva')
         payload = {'slot': self.slot.id, 'paciente': self.paciente.id, 'servicio': self.servicio.id}
         r1 = self.client.post(url, payload, format='json')
@@ -95,9 +87,6 @@ class AgendaExtraTests(TestCase):
         self.assertIn('sobrecupo', r2.data)
 
     def test_sobrecupo_rechazado_si_supera_limite(self):
-        """
-        El backend actual ya no lanza error, así que validamos solo el conteo.
-        """
         url = reverse('crear-reserva')
         payload = {'slot': self.slot.id, 'paciente': self.paciente.id, 'servicio': self.servicio.id}
         self.client.post(url, payload, format='json')

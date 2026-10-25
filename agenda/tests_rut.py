@@ -53,9 +53,9 @@ class PacienteRutApiTests(APITestCase):
 
     def test_editar_el_propio_rut_no_cuenta_como_repetido(self):
         self.client.force_authenticate(get_user_model().objects.create_user('personal', password='clave-segura-123', is_staff=True))
-        respuesta = self.client.patch(f"{BASE}/{self.paciente.id}/", {"rut": "12345678-5", "telefono": "999"}, format="json")
+        respuesta = self.client.patch(f"{BASE}/{self.paciente.id}/", {"rut": "12345678-5", "telefono": "+56912345678"}, format="json")
         self.assertEqual(respuesta.status_code, 200)
-        self.assertEqual(respuesta.json()["telefono"], "999")
+        self.assertEqual(respuesta.json()["telefono"], "+56912345678")
 
     def test_buscar_devuelve_solo_al_paciente_del_rut(self):
         Paciente.objects.create(rut="11.111.111-1", nombre="Ana", apellido="Ríos")
