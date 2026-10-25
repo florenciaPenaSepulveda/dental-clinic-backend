@@ -3,7 +3,7 @@ import logging
 from rest_framework import serializers
 from django.db import IntegrityError
 from django.db import transaction
-from .models import SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
+from .models import Atencion, ArchivoReserva, SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
 from django.core.mail import send_mail
 from django.conf import settings
 
@@ -37,7 +37,7 @@ class ReservaCreateSerializer(serializers.Serializer):
     dentista = serializers.IntegerField(required=False)
     fecha = serializers.DateField(required=False)
     hora_inicio = serializers.TimeField(required=False)
-    observaciones = serializers.CharField(required=False, allow_blank=True)
+    motivo = serializers.CharField(required=False, allow_blank=True, max_length=500)
 
     def _send_confirmation_email(self, reserva: Reserva):
         """Función privada para manejar el envío de correo."""
@@ -95,7 +95,8 @@ La Clínica Dental.
         dentista_id = validated_data.pop('dentista', None)
         fecha = validated_data.pop('fecha', None)
         hora_inicio = validated_data.pop('hora_inicio', None)
-        observaciones = validated_data.pop('observaciones', None)
+        motivo = validated_data.pop('motivo', '')
+        self.reutilizada = False
         
         paciente_data = validated_data.get('paciente')
         servicio_id = validated_data.get('servicio')
@@ -152,18 +153,20 @@ La Clínica Dental.
             existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
             if existing_reserva:
                 self._send_confirmation_email(existing_reserva)
+                self.reutilizada = True
                 return existing_reserva
             
             reservas_actuales = slot.reservas.select_for_update().count()
             if reservas_actuales < slot.capacidad:
                 try:
-                    reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False)
+                    reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False, motivo=motivo)
                     self._send_confirmation_email(reserva)
                     return reserva
                 except IntegrityError:
                     existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                     if existing_reserva:
                         self._send_confirmation_email(existing_reserva)
+                        self.reutilizada = True
                         return existing_reserva
                     raise
 
@@ -174,13 +177,14 @@ La Clínica Dental.
                 sobrecupos_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=fecha, sobrecupo=True).count()
                 if sobrecupos_dia < dentista.max_overbook_day:
                     try:
-                        reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True)
+                        reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True, motivo=motivo)
                         self._send_confirmation_email(reserva)
                         return reserva
                     except IntegrityError:
                         existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                         if existing_reserva:
                             self._send_confirmation_email(existing_reserva)
+                            self.reutilizada = True
                             return existing_reserva
                         raise
 
@@ -234,4 +238,82 @@ class ReservaReadSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Reserva
-        fields = ('id', 'slot', 'paciente', 'servicio', 'creado_en', 'sobrecupo')
+        fields = ('id', 'slot', 'paciente', 'servicio', 'creado_en', 'sobrecupo', 'estado', 'motivo', 'observaciones')
+
+
+class ArchivoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ArchivoReserva
+        fields = ('id', 'nombre', 'tipo', 'tamano', 'subido_en')
+
+
+class AtencionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Atencion
+        fields = ('diagnostico', 'procedimiento', 'indicaciones', 'actualizado_en')
+        read_only_fields = ('actualizado_en',)
+        extra_kwargs = {campo: {'max_length': 5000} for campo in ('diagnostico', 'procedimiento', 'indicaciones')}
+
+
+class _ConAtencion(serializers.Serializer):
+    atencion = serializers.SerializerMethodField()
+
+    def get_atencion(self, reserva):
+        atencion = getattr(reserva, 'atencion', None)
+        return AtencionSerializer(atencion).data if atencion else None
+
+
+class ReservaDetalleSerializer(_ConAtencion, ReservaReadSerializer):
+    archivos = ArchivoSerializer(many=True, read_only=True)
+
+    class Meta(ReservaReadSerializer.Meta):
+        fields = ReservaReadSerializer.Meta.fields + ('archivos', 'atencion')
+
+
+class ReservaActualizarSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Reserva
+        fields = ('estado', 'observaciones', 'servicio', 'slot')
+        extra_kwargs = {'observaciones': {'max_length': 2000}}
+
+    def validate(self, data):
+        slot = data.get('slot')
+        if slot is not None and slot.id != self.instance.slot_id:
+            if Reserva.objects.filter(slot=slot, paciente=self.instance.paciente).exists():
+                raise serializers.ValidationError({'slot': 'El paciente ya tiene una reserva en ese horario.'})
+            if slot.reservas.count() < slot.capacidad:
+                data['sobrecupo'] = False
+            elif slot.reservas.filter(sobrecupo=True).count() < slot.max_overbook:
+                data['sobrecupo'] = True
+            else:
+                raise serializers.ValidationError({'slot': 'El horario elegido está lleno.'})
+        return data
+
+
+class SlotSemanaSerializer(serializers.ModelSerializer):
+    reservas = ReservaDetalleSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SlotAgenda
+        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas')
+
+
+class HistorialSerializer(_ConAtencion, serializers.ModelSerializer):
+    fecha = serializers.DateField(source='slot.fecha')
+    hora = serializers.TimeField(source='slot.hora')
+    dentista = serializers.SerializerMethodField()
+    servicio = serializers.StringRelatedField()
+    archivos = ArchivoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Reserva
+        fields = ('id', 'fecha', 'hora', 'dentista', 'servicio', 'estado', 'motivo', 'archivos', 'atencion')
+
+    def get_dentista(self, reserva):
+        dentista = reserva.slot.dentista
+        return {'id': dentista.id, 'nombre': f"{dentista.nombre} {dentista.apellido}", 'especialidad': dentista.especialidad}
+
+
+class HistorialPersonalSerializer(HistorialSerializer):
+    class Meta(HistorialSerializer.Meta):
+        fields = HistorialSerializer.Meta.fields + ('observaciones',)

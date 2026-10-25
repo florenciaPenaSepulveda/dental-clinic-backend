@@ -2,7 +2,8 @@ from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework import status
 from .models import SlotAgenda, Reserva, Dentista
-from .permissions import IsStaff
+from .archivos import guardar_reserva, validar_archivos
+from .permissions import EsPersonal, perfil_dentista
 from .serializers import SlotAgendaSerializer, SlotDisponibilidadSerializer, ReservaCreateSerializer
 from django.utils import timezone
 from django.db.models import Count, Q
@@ -25,14 +26,16 @@ class CrearReserva(generics.CreateAPIView):
     serializer_class = ReservaCreateSerializer
 
     def create(self, request, *args, **kwargs):
+        archivos = request.FILES.getlist('archivos')
+        validar_archivos(archivos)
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        reserva = serializer.save()
+        reserva = guardar_reserva(serializer, archivos)
         return Response({'id': reserva.id, 'sobrecupo': reserva.sobrecupo}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['POST'])
-@permission_classes([IsStaff])
+@permission_classes([EsPersonal])
 def generar_slots(request, dentista_id):
     """Genera slots usando la lógica centralizada en `slots_generator`.
     body:
@@ -46,6 +49,10 @@ def generar_slots(request, dentista_id):
         dentista = Dentista.objects.get(pk=dentista_id)
     except Dentista.DoesNotExist:
         return Response({'detail': 'Dentista no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+    perfil = perfil_dentista(request.user)
+    if perfil is not None and perfil.id != dentista.id:
+        return Response({'detail': 'Solo puedes generar horarios de tu propia agenda.'}, status=status.HTTP_403_FORBIDDEN)
 
     fecha = request.data.get('fecha')
     desde = request.data.get('desde', '08:00')
