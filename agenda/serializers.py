@@ -201,10 +201,14 @@ class RegionSerializer(serializers.ModelSerializer):
 class DentistaSerializer(serializers.ModelSerializer):
     region = RegionSerializer(read_only=True)
     region_id = serializers.IntegerField(write_only=True, required=False)
-    
+    tiene_cuenta = serializers.SerializerMethodField()
+
     class Meta:
         model = Dentista
-        fields = ('id', 'nombre', 'apellido', 'especialidad', 'email', 'telefono', 'region', 'region_id', 'max_overbook_day')
+        fields = ('id', 'nombre', 'apellido', 'especialidad', 'email', 'telefono', 'region', 'region_id', 'max_overbook_day', 'tiene_cuenta')
+
+    def get_tiene_cuenta(self, dentista):
+        return dentista.usuario_id is not None
 
 
 class ServicioSerializer(serializers.ModelSerializer):
@@ -214,9 +218,14 @@ class ServicioSerializer(serializers.ModelSerializer):
 
 
 class PacienteSerializer(serializers.ModelSerializer):
+    tiene_cuenta = serializers.SerializerMethodField()
+
     class Meta:
         model = Paciente
-        fields = ('id', 'rut', 'nombre', 'apellido', 'telefono', 'email', 'fecha_registro')
+        fields = ('id', 'rut', 'nombre', 'apellido', 'telefono', 'email', 'fecha_registro', 'tiene_cuenta')
+
+    def get_tiene_cuenta(self, paciente):
+        return paciente.usuario_id is not None
 
     def validate_rut(self, value):
         rut = normalizar_rut(value)

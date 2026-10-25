@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
+from .cuentas import crear_o_reiniciar_cuenta, usuario_de_dentista
 from .archivos import adjuntar_archivos, guardar_reserva, validar_archivos
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio
 from .permissions import (
@@ -51,6 +52,11 @@ class DentistaViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(region=region_id)
         return queryset
 
+    @action(detail=True, methods=['post'], permission_classes=[EsRecepcion])
+    def cuenta(self, request, pk=None):
+        dentista = self.get_object()
+        return Response(crear_o_reiniciar_cuenta(dentista, usuario_de_dentista(dentista)))
+
 
 class ServicioViewSet(viewsets.ModelViewSet):
     queryset = Servicio.objects.all()
@@ -84,6 +90,11 @@ class PacienteViewSet(viewsets.ModelViewSet):
         if paciente is None:
             return Response({'detail': 'No existe un paciente con este RUT.'}, status=status.HTTP_404_NOT_FOUND)
         return Response(self.get_serializer(paciente).data)
+
+    @action(detail=True, methods=['post'])
+    def cuenta(self, request, pk=None):
+        paciente = self.get_object()
+        return Response(crear_o_reiniciar_cuenta(paciente, paciente.rut))
 
     @action(detail=True, methods=['get'])
     def historial(self, request, pk=None):
@@ -184,7 +195,7 @@ class ReservaViewSet(viewsets.ModelViewSet):
         serializer = AtencionSerializer(existente, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save(reserva=reserva)
-        if reserva.estado == 'pendiente':
+        if reserva.estado != 'atendida':
             reserva.estado = 'atendida'
             reserva.save(update_fields=['estado'])
         return Response(ReservaDetalleSerializer(self.get_queryset().get(pk=reserva.pk)).data)

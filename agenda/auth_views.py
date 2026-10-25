@@ -68,6 +68,23 @@ def activar_cuenta(request):
 
 @api_view(['POST'])
 @permission_classes([EsUsuarioConRol])
+@throttle_classes([LoginThrottle])
+def cambiar_clave(request):
+    usuario = request.user
+    if not usuario.check_password(str(request.data.get('actual', ''))):
+        return Response({'detail': 'La contraseña actual no es correcta.'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        validate_password(str(request.data.get('nueva', '')), usuario)
+    except ValidationError as exc:
+        return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+    usuario.set_password(str(request.data['nueva']))
+    usuario.save(update_fields=['password'])
+    Token.objects.filter(user=usuario).delete()
+    return respuesta_de_sesion(usuario)
+
+
+@api_view(['POST'])
+@permission_classes([EsUsuarioConRol])
 def logout(request):
     Token.objects.filter(user=request.user).delete()
     return Response(status=status.HTTP_204_NO_CONTENT)

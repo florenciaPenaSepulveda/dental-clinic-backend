@@ -22,6 +22,7 @@ urlpatterns = [
     path('archivos/<int:archivo_id>/', views_clinica.archivo, name='archivo'),
     path('auth/login/', auth_views.login, name='auth-login'),
     path('auth/activar-cuenta/', auth_views.activar_cuenta, name='auth-activar-cuenta'),
+    path('auth/cambiar-clave/', auth_views.cambiar_clave, name='auth-cambiar-clave'),
     path('auth/logout/', auth_views.logout, name='auth-logout'),
     path('auth/me/', auth_views.me, name='auth-me'),
     path('api/', include(router.urls)),
