@@ -1,9 +1,3 @@
-"""Generación de slots: implementa la práctica común de clínicas:
-
-- Slots de 30 minutos
-- Horario por defecto 08:00-18:00 (extendido para mayor flexibilidad)
-- Evita duplicados usando get_or_create
-"""
 import datetime
 from .models import SlotAgenda
 
