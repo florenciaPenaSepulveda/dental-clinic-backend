@@ -12,7 +12,7 @@ COPY . .
 
 RUN useradd --create-home --uid 1000 app \
     && mkdir -p /data \
-    && python manage.py collectstatic --noinput \
+    && DJANGO_SECRET_KEY=solo-para-compilar ALLOWED_HOSTS=localhost python manage.py collectstatic --noinput \
     && chown -R app:app /app /data
 
 USER app

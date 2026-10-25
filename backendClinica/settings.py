@@ -10,11 +10,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
 
-DEBUG = env_bool(os.environ.get('DEBUG'), default=True)
+PRUEBAS = 'test' in sys.argv
 
-SECRET_KEY = resolve_secret_key(DEBUG, os.environ)
+DEBUG = env_bool(os.environ.get('DEBUG'), default=False)
 
-ALLOWED_HOSTS = resolve_allowed_hosts(DEBUG, os.environ)
+SECRET_KEY = resolve_secret_key(DEBUG or PRUEBAS, os.environ)
+
+ALLOWED_HOSTS = resolve_allowed_hosts(DEBUG or PRUEBAS, os.environ)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -94,8 +96,6 @@ CORS_ALLOWED_ORIGINS = env_list(os.environ.get('CORS_ALLOWED_ORIGINS'), default=
 
 TOKEN_TTL_HORAS = int(os.environ.get('TOKEN_TTL_HORAS', '12'))
 
-PRUEBAS = 'test' in sys.argv
-
 if PRUEBAS:
     PASSWORD_HASHERS = ['django.contrib.auth.hashers.MD5PasswordHasher']
 
@@ -125,7 +125,7 @@ else:
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER or 'Clínica Dental <no-reply@clinica.local>')
 
-if not DEBUG:
+if not DEBUG and not PRUEBAS:
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_SSL_REDIRECT = env_bool(os.environ.get('SECURE_SSL_REDIRECT'), default=True)
     SESSION_COOKIE_SECURE = True
