@@ -33,13 +33,15 @@ python -m venv .venv
 .venv\Scripts\activate        # En Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py migrate
-python manage.py seed_data --generate-slots 7
+python manage.py seed_data --demo
 python manage.py runserver
 ```
 
 La API queda en `http://localhost:8000/agenda/`. El panel de administración está en `/admin/` (crea un usuario con `python manage.py createsuperuser`).
 
-`seed_data` crea dentistas, servicios y pacientes de ejemplo y genera horarios para los próximos días; se puede ejecutar varias veces sin duplicar datos.
+`seed_data --demo` carga un conjunto completo de demostración: 3 regiones, 5 dentistas con distintas especialidades, 7 servicios con precio, 24 pacientes (con RUT válido), unos 750 horarios para los próximos 14 días hábiles y alrededor de 35 reservas, algunas de ellas sobrecupos. Se puede ejecutar varias veces sin duplicar datos. Sin `--demo`, el comando crea datos genéricos (`--dentistas`, `--servicios`, `--pacientes` y `--generate-slots N`).
+
+Los correos de los pacientes de demostración usan `example.com`, un dominio reservado: el sistema nunca les envía confirmaciones. Para recibir una confirmación real, registra un paciente con tu propio correo.
 
 ### Con Docker
 
@@ -90,7 +92,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-41 pruebas con 97 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+50 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
