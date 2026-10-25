@@ -26,7 +26,9 @@ class Command(BaseCommand):
             self.stdout.write(self.style.SUCCESS('Datos de demostración cargados:'))
             for nombre, cantidad in resumen.items():
                 self.stdout.write(f"  {nombre.capitalize()}: {cantidad}")
-            self.stdout.write(f"Usuario de personal de demostración: {USUARIO_DEMO}")
+            self.stdout.write(f"Recepción: {USUARIO_DEMO}")
+            self.stdout.write("Dentistas: " + ", ".join(Dentista.objects.exclude(usuario=None).values_list('usuario__username', flat=True)))
+            self.stdout.write("Pacientes con cuenta (RUT): " + ", ".join(Paciente.objects.exclude(usuario=None).values_list('rut', flat=True)))
             return
 
         nd = options.get('dentistas')

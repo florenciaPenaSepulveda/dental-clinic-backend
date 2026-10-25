@@ -5,7 +5,7 @@ import random
 from django.contrib.auth import get_user_model
 from django.db import transaction
 
-from .models import Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
+from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
 from .slots_generator import generate_slots_for_day
 from .utils import rut_con_dv
 
@@ -31,6 +31,15 @@ SERVICIOS = [
 
 NOMBRES = ["Sofía", "Mateo", "Isidora", "Benjamín", "Florencia", "Vicente", "Antonella", "Joaquín", "Josefa", "Tomás", "Catalina", "Martín"]
 APELLIDOS = ["González", "Muñoz", "Rojas", "Díaz", "Pérez", "Soto", "Contreras", "Silva", "Martínez", "Sepúlveda", "Morales", "Fuentes", "Torres", "Araya"]
+
+ATENCIONES = [
+    ("Caries oclusal en la pieza 36", "Limpieza de la cavidad y restauración con resina compuesta", "Evitar alimentos duros durante 24 horas"),
+    ("Gingivitis leve generalizada", "Profilaxis y destartraje supragingival", "Cepillado suave tres veces al día y uso de hilo dental"),
+    ("Pulpitis irreversible en la pieza 46", "Apertura cameral y conductometría", "Tomar el analgésico indicado y volver para obturar el conducto"),
+    ("Apiñamiento dentario moderado", "Control mensual de ortodoncia y cambio de arco", "Mantener la higiene alrededor de los brackets"),
+    ("Sin hallazgos patológicos", "Control de rutina y fluoración", "Próximo control en seis meses"),
+    ("Pieza 28 incluida", "Extracción simple con sutura", "Dieta blanda y frío local las primeras 24 horas"),
+]
 
 DIAS_DE_AGENDA = 14
 BLOQUES = (("09:00", "13:00"), ("15:00", "17:30"))
@@ -120,15 +129,55 @@ def _crear_reservas(rng, pacientes, servicios, hoy):
 
 
 USUARIO_DEMO = 'recepcion'
+PACIENTES_CON_CUENTA = 3
+PACIENTES_CON_HISTORIAL = 6
+
+
+def clave_demo():
+    return os.environ.get('DEMO_STAFF_PASSWORD', 'recepcion123')
+
+
+def _usuario(username, **extra):
+    usuario, creado = get_user_model().objects.get_or_create(username=username, defaults=extra)
+    if creado:
+        usuario.set_password(clave_demo())
+        usuario.save()
+    return usuario
 
 
 def _crear_personal():
-    User = get_user_model()
-    usuario, creado = User.objects.get_or_create(username=USUARIO_DEMO, defaults={'is_staff': True})
-    if creado:
-        usuario.set_password(os.environ.get('DEMO_STAFF_PASSWORD', 'recepcion123'))
-        usuario.save()
-    return usuario
+    return _usuario(USUARIO_DEMO, is_staff=True)
+
+
+def _crear_cuentas(dentistas, pacientes):
+    for dentista in dentistas:
+        if dentista.usuario_id is None:
+            dentista.usuario = _usuario(f"dr.{_normalizar(dentista.apellido)}")
+            dentista.save(update_fields=['usuario'])
+    for paciente in pacientes[:PACIENTES_CON_CUENTA]:
+        if paciente.usuario_id is None:
+            paciente.usuario = _usuario(paciente.rut)
+            paciente.save(update_fields=['usuario'])
+
+
+def _crear_historial(dentistas, pacientes, servicios, hoy):
+    creadas = 0
+    for indice in range(15):
+        paciente = pacientes[indice % PACIENTES_CON_HISTORIAL]
+        dentista = dentistas[(indice * 2 + indice // PACIENTES_CON_HISTORIAL) % len(dentistas)]
+        fecha = hoy - datetime.timedelta(days=14 + indice * 9)
+        while fecha.weekday() >= 5:
+            fecha -= datetime.timedelta(days=1)
+        slot, _ = SlotAgenda.objects.get_or_create(dentista=dentista, fecha=fecha, hora=datetime.time(9 + indice % 8, 0))
+        reserva, nueva = Reserva.objects.get_or_create(
+            slot=slot, paciente=paciente, defaults={'servicio': servicios[indice % len(servicios)], 'estado': 'atendida'}
+        )
+        diagnostico, procedimiento, indicaciones = ATENCIONES[indice % len(ATENCIONES)]
+        Atencion.objects.get_or_create(
+            reserva=reserva, defaults={'diagnostico': diagnostico, 'procedimiento': procedimiento, 'indicaciones': indicaciones}
+        )
+        creadas += nueva
+    return creadas
 
 
 @transaction.atomic
@@ -138,8 +187,10 @@ def cargar_demo(hoy=None):
     dentistas, servicios = _crear_catalogos(rng)
     pacientes = _crear_pacientes(rng)
     _crear_personal()
+    _crear_cuentas(dentistas, pacientes)
     _crear_agenda(dentistas, hoy)
     reservas = _crear_reservas(rng, pacientes, servicios, hoy)
+    atenciones = _crear_historial(dentistas, pacientes, servicios, hoy)
     return {
         "regiones": Region.objects.count(),
         "dentistas": len(dentistas),
@@ -147,4 +198,5 @@ def cargar_demo(hoy=None):
         "pacientes": len(pacientes),
         "slots": SlotAgenda.objects.count(),
         "reservas": reservas,
+        "atenciones": atenciones,
     }
