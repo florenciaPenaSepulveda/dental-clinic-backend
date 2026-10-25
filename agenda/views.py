@@ -8,8 +8,6 @@ from rest_framework.decorators import api_view
 from rest_framework import status
 from rest_framework.response import Response
 
-# Reutilizamos la lógica de generación para permitir que la misma lógica sea llamada
-# desde la vista y desde un comando management.
 from .slots_generator import generate_slots_for_day, generate_slots_range
 
 
@@ -17,7 +15,6 @@ class SlotsDisponiblesList(generics.ListAPIView):
     serializer_class = SlotAgendaSerializer
 
     def get_queryset(self):
-        # devolver slots >= hoy
         hoy = timezone.localdate()
         return SlotAgenda.objects.filter(fecha__gte=hoy).order_by('fecha', 'hora')
 
@@ -68,7 +65,6 @@ def generar_slots(request, dentista_id):
     except Exception:
         return Response({'detail': 'El campo dias debe ser un entero.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # si dias > 1 usamos generate_slots_range
     if dias > 1:
         end_date = fecha_obj + datetime.timedelta(days=dias - 1)
         created = generate_slots_range(dentista, fecha_obj, end_date, desde=desde, hasta=hasta)

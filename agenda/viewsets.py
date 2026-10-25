@@ -57,7 +57,6 @@ class ReservaViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         instance = serializer.save()
         
-        # Devolver una respuesta simple sin problemas de serialización
         return Response({
             'id': instance.id,
             'slot': instance.slot.id,
@@ -70,12 +69,10 @@ class ReservaViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         queryset = self.queryset.all()
 
-        # Filtrar por dentista si se especifica
         dentista_id = self.request.query_params.get('dentista', None)
         if dentista_id is not None:
             queryset = queryset.filter(slot__dentista=dentista_id)
             
-        # Filtrar por fecha si se especifica
         fecha = self.request.query_params.get('fecha', None)
         if fecha is not None:
             queryset = queryset.filter(slot__fecha=fecha)

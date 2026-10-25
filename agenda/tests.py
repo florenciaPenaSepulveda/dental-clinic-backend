@@ -12,7 +12,6 @@ class ReservaCapacityTest(TestCase):
         self.dentista = Dentista.objects.create(nombre='Ana', apellido='Perez', especialidad='Ortodoncia')
         self.paciente = Paciente.objects.create(nombre='Juan', apellido='Lopez')
         self.servicio = Servicio.objects.create(nombre='Limpieza', duracion_min=30, precio=30)
-        # slot con capacidad 1
         self.slot = SlotAgenda.objects.create(
             dentista=self.dentista,
             servicio=self.servicio,
@@ -31,12 +30,9 @@ class ReservaCapacityTest(TestCase):
         r1 = self.client.post(url, payload, format='json')
         self.assertEqual(r1.status_code, 201)
 
-        # Segundo intento antes fallaba, ahora se crea como sobrecupo (o igual que normal)
         r2 = self.client.post(url, payload, format='json')
         self.assertEqual(r2.status_code, 201)
         self.assertIn('sobrecupo', r2.data)
-        # Ya que el backend nuevo puede devolver False o True, solo verificamos que exista la clave
-        print("Segundo intento (status):", r2.status_code, "Sobrecupo:", r2.data.get('sobrecupo'))
 
 
 class GenerateSlotsTest(TestCase):
@@ -102,7 +98,6 @@ class AgendaExtraTests(TestCase):
         """
         url = reverse('crear-reserva')
         payload = {'slot': self.slot.id, 'paciente': self.paciente.id, 'servicio': self.servicio.id}
-        # Crear reservas dentro de límite
         self.client.post(url, payload, format='json')
         self.client.post(url, payload, format='json')
         self.client.post(url, payload, format='json')

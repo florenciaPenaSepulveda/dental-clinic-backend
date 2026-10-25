@@ -81,12 +81,11 @@ class SlotAgenda(models.Model):
         return f"{self.dentista} - {self.fecha} {self.hora}"
 
     def clean(self):
-        # Validaciones: 08:00-16:00 y bloques de 30 minutos
         from django.core.exceptions import ValidationError
         import datetime
 
         min_hora = datetime.time(8, 0)
-        max_hora = datetime.time(18, 0)  # Extendido hasta las 18:00 para mayor flexibilidad
+        max_hora = datetime.time(18, 0)
         if self.hora < min_hora or self.hora > max_hora:
             raise ValidationError({'hora': 'La hora debe estar entre 08:00 y 18:00.'})
 

@@ -20,7 +20,6 @@ def generate_slots_for_day(dentista, fecha, desde='08:00', hasta='18:00', capaci
     current = datetime.datetime.combine(fecha, t_desde)
     end = datetime.datetime.combine(fecha, t_hasta)
     created = 0
-    # crear slots en bloques de 30 minutos (excluye el instante final si es igual a end)
     while current <= end:
         hora = current.time()
         SlotAgenda.objects.get_or_create(
