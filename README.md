@@ -15,7 +15,7 @@ Construida con **Django 4.2**, **Django REST Framework** y SQLite.
 
 ## Funcionalidades
 
-- Catálogos de regiones, dentistas, servicios y pacientes (RUT único por paciente).
+- Catálogos de regiones, dentistas, servicios y pacientes (RUT único por paciente, validado con su dígito verificador y guardado siempre como `12.345.678-5`).
 - Horarios en bloques de 30 minutos entre 08:00 y 18:00, sin duplicados por dentista, fecha y hora.
 - Generación masiva de horarios por día o por rango de días.
 - Reservas transaccionales: si el horario está lleno, se permite **sobrecupo** solo mientras no se superen el límite del horario ni el límite diario del dentista.
@@ -84,6 +84,7 @@ Prefijo `/agenda/`.
 | `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1` | Horarios de un día, opcionalmente de un dentista |
 | `POST /dentistas/{id}/generar_slots/` | Genera horarios (`fecha`, `desde`, `hasta`, `dias`) |
 | `POST /reservas/` | Crea una reserva con `slot` o con `dentista`, `fecha` y `hora_inicio`, más `paciente` |
+| `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
 | `/api/regiones/`, `/api/dentistas/`, `/api/servicios/`, `/api/pacientes/`, `/api/reservas/` | CRUD de cada recurso (`?region=` para dentistas; `?dentista=` y `?fecha=` para reservas) |
 
 ## Pruebas
@@ -94,7 +95,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-50 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+71 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
