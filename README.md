@@ -112,7 +112,7 @@ Las operaciones del público son: consultar dentistas, servicios y horarios (con
 
 Las observaciones internas de una reserva solo las ven recepción y el dentista; el paciente ve el motivo, el diagnóstico, el procedimiento y las indicaciones. Los exámenes se guardan fuera de las rutas públicas y solo se descargan con sesión, por quien tiene acceso a esa reserva. Se aceptan PDF, JPG y PNG de hasta 5 MB, máximo 5 por reserva, y se comprueba que el contenido corresponda a la extensión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
 
-Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez, y cada persona la cambia desde Mi cuenta. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
+Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez. La contraseña temporal es de un solo uso: hasta que la persona la cambie desde Mi cuenta, la API responde 403 a todo salvo cambiar la contraseña y cerrar sesión, y el login informa `debe_cambiar_clave`. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
 
 ## Pruebas
 
@@ -122,7 +122,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-140 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+147 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
