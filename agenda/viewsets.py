@@ -1,7 +1,9 @@
-from rest_framework import viewsets
+from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import SAFE_METHODS, BasePermission, AllowAny
 from rest_framework.response import Response
 from .models import Dentista, Servicio, Paciente, Region, Reserva
+from .utils import normalizar_rut
 from .serializers import DentistaSerializer, ServicioSerializer, PacienteSerializer, RegionSerializer, ReservaCreateSerializer, ReservaReadSerializer
 
 
@@ -41,6 +43,16 @@ class PacienteViewSet(viewsets.ModelViewSet):
     queryset = Paciente.objects.all()
     serializer_class = PacienteSerializer
     permission_classes = [AllowAny]
+
+    @action(detail=False, methods=['get'])
+    def buscar(self, request):
+        rut = normalizar_rut(request.query_params.get('rut', ''))
+        if rut is None:
+            return Response({'detail': 'El RUT ingresado no es válido.'}, status=status.HTTP_400_BAD_REQUEST)
+        paciente = self.get_queryset().filter(rut=rut).first()
+        if paciente is None:
+            return Response({'detail': 'No existe un paciente con este RUT.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(self.get_serializer(paciente).data)
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
