@@ -51,7 +51,7 @@ Aplica las migraciones al iniciar y guarda la base en un volumen. Disponible en 
 
 ## Variables de entorno
 
-Todas son opcionales; sin ellas se usan valores de desarrollo. Con Docker se pueden definir en un archivo `.env` (ver `.env.example`).
+Todas son opcionales; sin ellas se usan valores de desarrollo. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
 
 | Variable | Descripción |
 |---|---|
@@ -62,7 +62,13 @@ Todas son opcionales; sin ellas se usan valores de desarrollo. Con Docker se pue
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
 | `DEFAULT_FROM_EMAIL` | Remitente de los correos |
 
-Sin credenciales de correo, los mensajes se imprimen en la consola del servidor.
+### Envío de correos
+
+1. Activa la verificación en dos pasos en la cuenta de Gmail.
+2. Crea una contraseña de aplicación en myaccount.google.com/apppasswords (16 caracteres).
+3. Escribe tu correo en `EMAIL_HOST_USER` y esa contraseña en `EMAIL_HOST_PASSWORD` dentro de `.env`, y reinicia el servidor.
+
+Sin credenciales de correo, los mensajes se imprimen en la consola del servidor. Las pruebas automáticas nunca envían correos reales.
 
 ## Endpoints principales
 
