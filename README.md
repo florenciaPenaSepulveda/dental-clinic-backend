@@ -32,6 +32,7 @@ Construida con **Django 4.2**, **Django REST Framework** y SQLite.
 python -m venv .venv
 .venv\Scripts\activate        # En Linux/macOS: source .venv/bin/activate
 pip install -r requirements.txt
+copy .env.example .env        # En Linux/macOS: cp .env.example .env
 python manage.py migrate
 python manage.py seed_data --demo
 python manage.py runserver
@@ -53,12 +54,12 @@ Aplica las migraciones al iniciar y guarda la base en un volumen. Disponible en 
 
 ## Variables de entorno
 
-Todas son opcionales mientras `DEBUG` esté activo; sin ellas se usan valores de desarrollo. Con `DEBUG=False` (producción) `DJANGO_SECRET_KEY` es obligatoria y el servidor no arranca sin ella. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
+Por seguridad, `DEBUG` está apagado por defecto: sin él, `DJANGO_SECRET_KEY` y `ALLOWED_HOSTS` son obligatorias y el servidor no arranca sin ellas. Para trabajar en local copia `.env.example` a `.env`, que activa `DEBUG=True` y valores de desarrollo. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
 
 | Variable | Descripción |
 |---|---|
 | `DJANGO_SECRET_KEY` | Clave secreta de Django (obligatoria con `DEBUG=False`) |
-| `DEBUG` | `True` o `False` |
+| `DEBUG` | `True` solo en desarrollo; por defecto `False` |
 | `ALLOWED_HOSTS` | Hosts permitidos separados por coma (obligatoria con `DEBUG=False`) |
 | `CORS_ALLOWED_ORIGINS` | Orígenes del frontend autorizados, separados por coma (por defecto `http://localhost:5173`) |
 | `TOKEN_TTL_HORAS` | Horas de vigencia de una sesión antes de pedir el ingreso otra vez (por defecto 12) |
@@ -103,6 +104,10 @@ Prefijo `/agenda/`.
 | `GET /mi/historial/` | Citas próximas e historial del paciente que inició sesión |
 | `/api/regiones/`, `/api/dentistas/`, `/api/servicios/`, `/api/pacientes/`, `/api/reservas/` | CRUD de cada recurso (`?region=` para dentistas; `?dentista=` y `?fecha=` para reservas) |
 
+### Listados
+
+Los listados de pacientes y de reservas vienen paginados (`count`, `next`, `previous`, `results`; 25 por página, con `?page=` y `?page_size=` hasta 100). `GET /api/pacientes/?q=` busca en el servidor por nombre, apellido, correo o RUT, con o sin puntos y guion, y todas las palabras deben coincidir.
+
 ### Acceso y permisos
 
 Las operaciones del público son: consultar dentistas, servicios y horarios (con la cantidad de reservas de cada horario, sin datos de pacientes), buscar un paciente por RUT, registrarse como paciente y reservar una hora, opcionalmente adjuntando exámenes. Todo lo demás exige un token en la cabecera `Authorization: Token <token>` y depende del rol:
@@ -127,7 +132,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-172 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+179 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
