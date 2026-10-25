@@ -15,16 +15,18 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .config import env_bool, env_list, resolve_secret_key
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(BASE_DIR / '.env')
 
 
-SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'dev-only-insecure-key-change-me')
+DEBUG = env_bool(os.environ.get('DEBUG'), default=True)
 
-DEBUG = os.environ.get('DEBUG', 'True').lower() in ('1', 'true', 'yes')
+SECRET_KEY = resolve_secret_key(DEBUG, os.environ)
 
-ALLOWED_HOSTS = [host.strip() for host in os.environ.get('ALLOWED_HOSTS', '*').split(',') if host.strip()]
+ALLOWED_HOSTS = env_list(os.environ.get('ALLOWED_HOSTS'), default='*')
 
 
 INSTALLED_APPS = [
