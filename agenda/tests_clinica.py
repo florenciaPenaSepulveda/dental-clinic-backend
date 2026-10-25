@@ -1,4 +1,5 @@
 import datetime
+import os
 import shutil
 import tempfile
 from unittest import mock
@@ -309,6 +310,17 @@ class ArchivosTests(ClinicaBase):
         self.como(self.dr)
         self.assertEqual(self.client.delete(url).status_code, 204)
         self.assertEqual(ArchivoReserva.objects.count(), 0)
+
+    def test_al_eliminar_la_reserva_o_el_archivo_se_borra_el_archivo_del_disco(self):
+        self.reservar([pdf("uno.pdf"), pdf("dos.pdf")])
+        uno, dos = ArchivoReserva.objects.order_by("id")
+        ruta_uno, ruta_dos = uno.archivo.path, dos.archivo.path
+        self.assertTrue(os.path.exists(ruta_uno) and os.path.exists(ruta_dos))
+        self.como(self.dr)
+        self.client.delete(f"{BASE}/archivos/{uno.id}/")
+        self.assertFalse(os.path.exists(ruta_uno))
+        Reserva.objects.filter(id=dos.reserva_id).delete()
+        self.assertFalse(os.path.exists(ruta_dos))
 
     def test_agrega_archivos_a_una_reserva_existente(self):
         url = f"{BASE}/api/reservas/{self.reserva.id}/archivos/"
