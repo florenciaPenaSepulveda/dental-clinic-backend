@@ -15,7 +15,7 @@ from rest_framework.throttling import SimpleRateThrottle
 from backendClinica.config import resolve_allowed_hosts
 
 from .models import Dentista, Paciente, Reserva, Servicio, SlotAgenda
-from .utils import horario_pasado, ocultar_correo, ocultar_telefono
+from .utils import horario_pasado, ocultar_correo, ocultar_telefono, rut_con_dv
 
 BASE = "/agenda"
 HOY = timezone.localdate()
@@ -210,3 +210,58 @@ class ConsultaDeHorarios(Base):
     def test_rechaza_un_identificador_de_dentista_invalido(self):
         self.assertEqual(self.client.get(f"{BASE}/slots_por_fecha/", {"dentista_id": "abc"}).status_code, 400)
         self.assertEqual(self.client.get(f"{BASE}/slots_por_fecha/", {"dentista_id": self.dentista.id}).status_code, 200)
+
+
+class ListasPaginadas(Base):
+    def setUp(self):
+        super().setUp()
+        self.client.force_authenticate(self.recepcion)
+        for numero in range(1, 31):
+            cuerpo = 10000000 + numero * 1000
+            Paciente.objects.create(rut=rut_con_dv(cuerpo), nombre=f"Paciente{numero:02d}", apellido="Prueba", email=f"p{numero}@correo.cl")
+
+    def listar(self, **parametros):
+        return self.client.get(f"{BASE}/api/pacientes/", parametros).json()
+
+    def test_pagina_los_pacientes_de_a_25(self):
+        primera = self.listar()
+        self.assertEqual((primera["count"], len(primera["results"])), (31, 25))
+        self.assertIsNotNone(primera["next"])
+        self.assertIsNone(primera["previous"])
+        segunda = self.listar(page=2)
+        self.assertEqual(len(segunda["results"]), 6)
+        self.assertIsNone(segunda["next"])
+
+    def test_permite_pedir_otro_tamano_con_un_maximo(self):
+        self.assertEqual(len(self.listar(page_size=5)["results"]), 5)
+        self.assertEqual(len(self.listar(page_size=1000)["results"]), 31)
+
+    def test_una_pagina_inexistente_responde_404(self):
+        self.assertEqual(self.client.get(f"{BASE}/api/pacientes/", {"page": 9}).status_code, 404)
+
+    def test_busca_por_nombre_apellido_correo_y_rut(self):
+        self.assertEqual(self.listar(q="paciente07")["count"], 1)
+        self.assertEqual(self.listar(q="prueba")["count"], 30)
+        self.assertEqual(self.listar(q="p12@correo")["count"], 1)
+        self.assertEqual(self.listar(q="juan soto")["count"], 1)
+        self.assertEqual(self.listar(q="soto juan")["count"], 1)
+        self.assertEqual(self.listar(q="nadie")["count"], 0)
+
+    def test_la_busqueda_por_rut_ignora_puntos_y_guion(self):
+        esperado = rut_con_dv(10000000 + 5 * 1000)
+        for texto in (esperado, esperado.replace(".", ""), esperado.replace(".", "").replace("-", ""), esperado[:6]):
+            encontrados = self.listar(q=texto)["results"]
+            self.assertIn(esperado, [p["rut"] for p in encontrados], texto)
+
+    def test_la_busqueda_respeta_los_permisos_del_dentista(self):
+        self.client.force_authenticate(self.dentista.usuario)
+        self.assertEqual(self.listar()["count"], 0)
+        Reserva.objects.create(slot=self.slot, paciente=self.paciente)
+        self.assertEqual(self.listar(q="soto")["count"], 1)
+        self.assertEqual(self.listar(q="paciente07")["count"], 0)
+
+    def test_las_reservas_tambien_vienen_paginadas(self):
+        for paciente in Paciente.objects.exclude(pk=self.paciente.pk)[:27]:
+            Reserva.objects.create(slot=self.slot, paciente=paciente)
+        respuesta = self.client.get(f"{BASE}/api/reservas/").json()
+        self.assertEqual((respuesta["count"], len(respuesta["results"])), (27, 25))

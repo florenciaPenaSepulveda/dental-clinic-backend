@@ -85,14 +85,14 @@ class RolesTests(ClinicaBase):
 
     def test_el_dentista_solo_ve_a_sus_pacientes(self):
         self.como(self.dr)
-        lista = self.client.get(f"{BASE}/api/pacientes/").json()
+        lista = self.client.get(f"{BASE}/api/pacientes/").json()["results"]
         self.assertEqual([p["rut"] for p in lista], ["12.345.678-5"])
         self.assertEqual(self.client.get(f"{BASE}/api/pacientes/{self.paciente.id}/").status_code, 200)
         self.assertEqual(self.client.get(f"{BASE}/api/pacientes/{self.otro_paciente.id}/").status_code, 404)
 
     def test_recepcion_ve_a_todos_y_el_dentista_no_puede_modificar_pacientes(self):
         self.como(self.recepcion)
-        self.assertEqual(len(self.client.get(f"{BASE}/api/pacientes/").json()), 2)
+        self.assertEqual(self.client.get(f"{BASE}/api/pacientes/").json()["count"], 2)
         self.como(self.dr)
         self.assertEqual(self.client.patch(f"{BASE}/api/pacientes/{self.paciente.id}/", {"nombre": "X"}, format="json").status_code, 403)
         self.assertEqual(self.client.delete(f"{BASE}/api/pacientes/{self.paciente.id}/").status_code, 403)
@@ -104,7 +104,7 @@ class RolesTests(ClinicaBase):
 
     def test_el_dentista_solo_ve_sus_reservas(self):
         self.como(self.dr)
-        lista = self.client.get(f"{BASE}/api/reservas/").json()
+        lista = self.client.get(f"{BASE}/api/reservas/").json()["results"]
         self.assertEqual([r["id"] for r in lista], [self.reserva.id])
         self.assertEqual(self.client.get(f"{BASE}/api/reservas/{self.reserva_ajena.id}/").status_code, 404)
         self.assertEqual(self.client.delete(f"{BASE}/api/reservas/{self.reserva_ajena.id}/").status_code, 404)

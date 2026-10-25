@@ -110,7 +110,7 @@ class CatalogosApiTests(APITestCase):
 
         listado = self.client.get(f"{BASE}/api/pacientes/")
         self.assertEqual(listado.status_code, 200)
-        self.assertEqual(len(listado.json()), 1)
+        self.assertEqual(listado.json()["count"], 1)
 
         actualizado = self.client.patch(f"{BASE}/api/pacientes/{paciente.json()['id']}/", {"telefono": "+56 9 1234 5678"}, format="json")
         self.assertEqual(actualizado.json()["telefono"], "+56 9 1234 5678")
@@ -262,10 +262,10 @@ class ReservasApiTests(APITestCase):
 
         todas = self.client.get(f"{BASE}/api/reservas/")
         self.assertEqual(todas.status_code, 200)
-        self.assertEqual(len(todas.json()), 1)
-        por_dentista = self.client.get(f"{BASE}/api/reservas/", {"dentista": self.dentista.id}).json()
-        por_fecha = self.client.get(f"{BASE}/api/reservas/", {"fecha": MANANA.isoformat()}).json()
-        fuera = self.client.get(f"{BASE}/api/reservas/", {"fecha": "2000-01-01"}).json()
+        self.assertEqual(todas.json()["count"], 1)
+        por_dentista = self.client.get(f"{BASE}/api/reservas/", {"dentista": self.dentista.id}).json()["results"]
+        por_fecha = self.client.get(f"{BASE}/api/reservas/", {"fecha": MANANA.isoformat()}).json()["results"]
+        fuera = self.client.get(f"{BASE}/api/reservas/", {"fecha": "2000-01-01"}).json()["results"]
         self.assertEqual((len(por_dentista), len(por_fecha), len(fuera)), (1, 1, 0))
 
         detalle = self.client.get(f"{BASE}/api/reservas/{creada.json()['id']}/")
