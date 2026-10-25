@@ -1,3 +1,7 @@
+import re
+
+from django.db.models import Q, Value
+from django.db.models.functions import Replace
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -7,6 +11,7 @@ from rest_framework.response import Response
 
 from .cuentas import crear_o_reiniciar_cuenta, usuario_de_dentista
 from .archivos import adjuntar_archivos, guardar_reserva, validar_archivos
+from .paginacion import PaginaEstandar
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio
 from .permissions import (
     DENTISTA,
@@ -68,6 +73,7 @@ class ServicioViewSet(viewsets.ModelViewSet):
 class PacienteViewSet(viewsets.ModelViewSet):
     queryset = Paciente.objects.all()
     serializer_class = PacienteSerializer
+    pagination_class = PaginaEstandar
 
     def get_permissions(self):
         if self.action in ('create', 'buscar'):
@@ -82,10 +88,26 @@ class PacienteViewSet(viewsets.ModelViewSet):
         return super().get_throttles()
 
     def get_queryset(self):
+        queryset = self.queryset.all()
         perfil = perfil_dentista(self.request.user)
-        if perfil is None:
-            return self.queryset.all()
-        return self.queryset.filter(reservas__slot__dentista=perfil).distinct()
+        if perfil is not None:
+            queryset = queryset.filter(reservas__slot__dentista=perfil).distinct()
+        if self.action == 'list':
+            queryset = self._buscar(queryset, self.request.query_params.get('q', ''))
+        return queryset
+
+    def _buscar(self, queryset, texto):
+        terminos = texto.split()
+        if not terminos:
+            return queryset
+        queryset = queryset.annotate(rut_limpio=Replace(Replace('rut', Value('.'), Value('')), Value('-'), Value('')))
+        for termino in terminos:
+            limpio = re.sub(r'[.\-]', '', termino)
+            filtro = Q(nombre__icontains=termino) | Q(apellido__icontains=termino) | Q(email__icontains=termino) | Q(rut__icontains=termino)
+            if limpio:
+                filtro |= Q(rut_limpio__icontains=limpio)
+            queryset = queryset.filter(filtro)
+        return queryset
 
     @action(detail=False, methods=['get'], throttle_classes=[BuscarThrottle])
     def buscar(self, request):
@@ -128,6 +150,7 @@ class PacienteViewSet(viewsets.ModelViewSet):
 
 
 class ReservaViewSet(viewsets.ModelViewSet):
+    pagination_class = PaginaEstandar
     queryset = (
         Reserva.objects.select_related('slot', 'slot__dentista', 'paciente', 'servicio', 'atencion')
         .prefetch_related('archivos')
