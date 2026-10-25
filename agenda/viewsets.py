@@ -10,6 +10,7 @@ from .archivos import adjuntar_archivos, guardar_reserva, validar_archivos
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio
 from .permissions import (
     DENTISTA,
+    RECEPCION,
     EsPersonal,
     EsRecepcion,
     EsUsuarioConRol,
@@ -30,8 +31,8 @@ from .serializers import (
     ReservaDetalleSerializer,
     ServicioSerializer,
 )
-from .throttles import BuscarThrottle
-from .utils import normalizar_rut
+from .throttles import BuscarThrottle, RegistroThrottle, ReservaThrottle
+from .utils import normalizar_rut, ocultar_correo, ocultar_telefono
 
 
 class RegionViewSet(viewsets.ModelViewSet):
@@ -75,6 +76,11 @@ class PacienteViewSet(viewsets.ModelViewSet):
             return [EsPersonal()]
         return [EsRecepcion()]
 
+    def get_throttles(self):
+        if self.action == 'create':
+            return [RegistroThrottle()]
+        return super().get_throttles()
+
     def get_queryset(self):
         perfil = perfil_dentista(self.request.user)
         if perfil is None:
@@ -89,7 +95,17 @@ class PacienteViewSet(viewsets.ModelViewSet):
         paciente = Paciente.objects.filter(rut=rut).first()
         if paciente is None:
             return Response({'detail': 'No existe un paciente con este RUT.'}, status=status.HTTP_404_NOT_FOUND)
-        return Response(self.get_serializer(paciente).data)
+        datos = self.get_serializer(paciente).data
+        if rol_de(request.user) in (RECEPCION, DENTISTA):
+            return Response(datos)
+        return Response({
+            'id': datos['id'],
+            'rut': datos['rut'],
+            'nombre': datos['nombre'],
+            'apellido': datos['apellido'],
+            'telefono': ocultar_telefono(datos['telefono']),
+            'email': ocultar_correo(datos['email']),
+        })
 
     @action(detail=True, methods=['post'])
     def cuenta(self, request, pk=None):
@@ -124,6 +140,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
         if self.action == 'archivos':
             return [EsUsuarioConRol()]
         return [EsPersonal()]
+
+    def get_throttles(self):
+        if self.action == 'create':
+            return [ReservaThrottle()]
+        return super().get_throttles()
 
     def get_serializer_class(self):
         if self.action == 'create':

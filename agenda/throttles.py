@@ -12,3 +12,11 @@ class LoginThrottle(_PorIp):
 
 class BuscarThrottle(_PorIp):
     scope = 'buscar'
+
+
+class ReservaThrottle(_PorIp):
+    scope = 'reservas'
+
+
+class RegistroThrottle(_PorIp):
+    scope = 'registro'

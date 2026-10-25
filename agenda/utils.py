@@ -1,4 +1,7 @@
+import datetime
 import re
+
+from django.utils import timezone
 
 PATRON_RUT = re.compile(r'^\s*([1-9]\d?(?:\.?\d{3}){2})\s*-?\s*([\dkK])\s*$')
 RUT_MINIMO = 1_000_000
@@ -30,6 +33,25 @@ def normalizar_rut(valor):
     if normalizado[-1] != coincidencia.group(2).upper():
         return None
     return normalizado
+
+
+def ocultar_correo(correo):
+    if '@' not in correo:
+        return ''
+    usuario, dominio = correo.rsplit('@', 1)
+    return f"{usuario[:1]}{'*' * max(len(usuario) - 1, 3)}@{dominio}"
+
+
+def ocultar_telefono(telefono):
+    texto = telefono.strip()
+    if len(texto) <= 4:
+        return '*' * len(texto)
+    return '*' * (len(texto) - 4) + texto[-4:]
+
+
+def horario_pasado(fecha, hora):
+    ahora = timezone.localtime().replace(tzinfo=None)
+    return datetime.datetime.combine(fecha, hora) < ahora
 
 
 def es_correo_de_ejemplo(email):
