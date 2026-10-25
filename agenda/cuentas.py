@@ -5,6 +5,8 @@ import unicodedata
 from django.contrib.auth import get_user_model
 from rest_framework.authtoken.models import Token
 
+from .models import ClaveTemporal
+
 
 def _sin_tildes(texto):
     return re.sub(r'[^a-z0-9]', '', unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode().lower())
@@ -32,4 +34,5 @@ def crear_o_reiniciar_cuenta(perfil, username_base):
         perfil.usuario.set_password(clave)
         perfil.usuario.save(update_fields=['password'])
         Token.objects.filter(user=perfil.usuario).delete()
+    ClaveTemporal.objects.get_or_create(usuario=perfil.usuario)
     return {'username': perfil.usuario.get_username(), 'password': clave, 'creada': creada}

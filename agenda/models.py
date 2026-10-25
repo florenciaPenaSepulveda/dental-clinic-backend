@@ -162,6 +162,14 @@ class Atencion(models.Model):
         return f"Atención de {self.reserva.paciente}"
 
 
+class ClaveTemporal(models.Model):
+    usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='clave_temporal')
+    creada_en = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Clave temporal de {self.usuario}"
+
+
 @receiver(post_delete, sender=ArchivoReserva)
 def eliminar_archivo_del_disco(sender, instance, **kwargs):
     instance.archivo.delete(save=False)

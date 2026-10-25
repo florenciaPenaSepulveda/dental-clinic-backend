@@ -7,15 +7,20 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .models import Paciente
-from .permissions import DENTISTA, PACIENTE, EsUsuarioConRol, rol_de
+from .models import ClaveTemporal, Paciente
+from .permissions import DENTISTA, PACIENTE, EsUsuarioDelSistema, debe_cambiar_clave, rol_base
 from .throttles import LoginThrottle
 from .utils import normalizar_rut
 
 
 def datos_de_sesion(usuario):
-    rol = rol_de(usuario)
-    datos = {'username': usuario.get_username(), 'rol': rol, 'nombre': usuario.get_username()}
+    rol = rol_base(usuario)
+    datos = {
+        'username': usuario.get_username(),
+        'rol': rol,
+        'nombre': usuario.get_username(),
+        'debe_cambiar_clave': debe_cambiar_clave(usuario),
+    }
     if rol == DENTISTA:
         perfil = usuario.dentista_perfil
         datos.update(dentista_id=perfil.id, nombre=f"{perfil.nombre} {perfil.apellido}")
@@ -37,7 +42,7 @@ def respuesta_de_sesion(usuario):
 def login(request):
     username = str(request.data.get('username', '')).strip()
     usuario = authenticate(username=normalizar_rut(username) or username, password=str(request.data.get('password', '')))
-    if usuario is None or rol_de(usuario) is None:
+    if usuario is None or rol_base(usuario) is None:
         return Response({'detail': 'Usuario o contraseña incorrectos.'}, status=status.HTTP_400_BAD_REQUEST)
     return respuesta_de_sesion(usuario)
 
@@ -67,30 +72,33 @@ def activar_cuenta(request):
 
 
 @api_view(['POST'])
-@permission_classes([EsUsuarioConRol])
+@permission_classes([EsUsuarioDelSistema])
 @throttle_classes([LoginThrottle])
 def cambiar_clave(request):
     usuario = request.user
     if not usuario.check_password(str(request.data.get('actual', ''))):
         return Response({'detail': 'La contraseña actual no es correcta.'}, status=status.HTTP_400_BAD_REQUEST)
+    if request.data.get('nueva') == request.data.get('actual'):
+        return Response({'detail': 'La nueva contraseña debe ser distinta de la actual.'}, status=status.HTTP_400_BAD_REQUEST)
     try:
         validate_password(str(request.data.get('nueva', '')), usuario)
     except ValidationError as exc:
         return Response({'detail': ' '.join(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
     usuario.set_password(str(request.data['nueva']))
     usuario.save(update_fields=['password'])
+    ClaveTemporal.objects.filter(usuario=usuario).delete()
     Token.objects.filter(user=usuario).delete()
     return respuesta_de_sesion(usuario)
 
 
 @api_view(['POST'])
-@permission_classes([EsUsuarioConRol])
+@permission_classes([EsUsuarioDelSistema])
 def logout(request):
     Token.objects.filter(user=request.user).delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(['GET'])
-@permission_classes([EsUsuarioConRol])
+@permission_classes([EsUsuarioDelSistema])
 def me(request):
     return Response(datos_de_sesion(request.user))

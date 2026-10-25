@@ -5,7 +5,7 @@ DENTISTA = 'dentista'
 PACIENTE = 'paciente'
 
 
-def rol_de(user):
+def rol_base(user):
     if not user or not user.is_authenticated:
         return None
     if user.is_superuser:
@@ -17,6 +17,14 @@ def rol_de(user):
     if user.is_staff:
         return RECEPCION
     return None
+
+
+def debe_cambiar_clave(user):
+    return bool(user and user.is_authenticated and hasattr(user, 'clave_temporal'))
+
+
+def rol_de(user):
+    return None if debe_cambiar_clave(user) else rol_base(user)
 
 
 def perfil_dentista(user):
@@ -55,6 +63,11 @@ class EsPaciente(_PorRol):
 
 class EsUsuarioConRol(_PorRol):
     roles = (RECEPCION, DENTISTA, PACIENTE)
+
+
+class EsUsuarioDelSistema(BasePermission):
+    def has_permission(self, request, view):
+        return rol_base(request.user) is not None
 
 
 class RecepcionOLectura(BasePermission):
