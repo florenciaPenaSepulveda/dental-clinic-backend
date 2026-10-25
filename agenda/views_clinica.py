@@ -70,7 +70,6 @@ def archivo(request, archivo_id):
     if request.method == 'DELETE':
         if rol_de(request.user) == PACIENTE:
             return Response({'detail': 'No tienes permiso para eliminar archivos.'}, status=status.HTTP_403_FORBIDDEN)
-        adjunto.archivo.delete(save=False)
         adjunto.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
     respuesta = FileResponse(adjunto.archivo.open('rb'), as_attachment=True, filename=adjunto.nombre, content_type=adjunto.tipo)
