@@ -1,6 +1,9 @@
 from rest_framework import serializers
 from django.db import IntegrityError
+from django.db import transaction  # <--- ¡IMPORTACIÓN FALTANTE AGREGADA AQUÍ!
 from .models import SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
+from django.core.mail import send_mail
+from django.conf import settings 
 
 
 class SlotAgendaSerializer(serializers.ModelSerializer):
@@ -24,8 +27,50 @@ class ReservaCreateSerializer(serializers.Serializer):
     hora_inicio = serializers.TimeField(required=False)
     observaciones = serializers.CharField(required=False, allow_blank=True)
 
+    def _send_confirmation_email(self, reserva: Reserva):
+        """Función privada para manejar el envío de correo."""
+        paciente = reserva.paciente
+        email_paciente = paciente.email
+        
+        # Solo enviar si el paciente tiene un correo registrado
+        if not email_paciente:
+            print(f"DEBUG: Paciente {paciente.nombre} no tiene email. Envío omitido.")
+            return
+
+        asunto = "Confirmación de Hora Agendada"
+        cuerpo_mensaje = f"""
+Estimado/a {paciente.nombre} {paciente.apellido},
+
+Su hora ha sido confirmada con éxito.
+
+Detalles de su cita:
+- Fecha: {reserva.slot.fecha}
+- Hora: {reserva.slot.hora}
+- Dentista: {reserva.slot.dentista}
+- Servicio: {reserva.slot.servicio}
+- Tipo: {'Sobrecupo' if reserva.sobrecupo else 'Normal'}
+
+Por favor, llegue 10 minutos antes.
+
+Atentamente,
+La Clínica Dental.
+"""
+        try:
+            send_mail(
+                asunto,
+                cuerpo_mensaje,
+                settings.DEFAULT_FROM_EMAIL,
+                [email_paciente],
+                fail_silently=False
+            )
+            print(f"DEBUG: Correo enviado a {email_paciente} por reserva ID {reserva.id}")
+        except Exception as e:
+            print(f"ERROR: No se pudo enviar el correo de confirmación. Detalle: {e}")
+            # El error de envío de correo no debe bloquear la creación de la reserva
+
+
     def validate(self, data):
-        # Si no se proporciona slot, se debe proporcionar dentista, fecha y hora_inicio
+        # ... (Tu código de validación existente) ...
         if not data.get('slot'):
             if not all([data.get('dentista'), data.get('fecha'), data.get('hora_inicio')]):
                 raise serializers.ValidationError(
@@ -34,7 +79,7 @@ class ReservaCreateSerializer(serializers.Serializer):
         return data
 
     def create(self, validated_data):
-        # Debug: imprimir los datos que llegan
+        # ... (Tu código existente para extraer y obtener instancias de modelos) ...
         print("=== DEBUG SERIALIZER CREATE ===")
         print("validated_data:", validated_data)
         print("Tipos de datos:")
@@ -104,23 +149,25 @@ class ReservaCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("No se pudo crear o encontrar un slot válido")
         
         # Lógica transaccional común en clínicas: contar reservas con select_for_update
-        from django.db import transaction
-
+        
         with transaction.atomic():
             # Primero verificar si ya existe esta reserva exacta
             existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
             if existing_reserva:
-                # Si ya existe, retornar la existente en lugar de crear una nueva
+                self._send_confirmation_email(existing_reserva) # Envío
                 return existing_reserva
             
             reservas_actuales = slot.reservas.select_for_update().count()
             if reservas_actuales < slot.capacidad:
                 try:
-                    return Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False)
+                    reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False)
+                    self._send_confirmation_email(reserva) # Envío
+                    return reserva
                 except IntegrityError:
                     # Si falla por constraint único, buscar la reserva existente
                     existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                     if existing_reserva:
+                        self._send_confirmation_email(existing_reserva) # Envío
                         return existing_reserva
                     raise
 
@@ -133,18 +180,19 @@ class ReservaCreateSerializer(serializers.Serializer):
                 sobrecupos_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=fecha, sobrecupo=True).count()
                 if sobrecupos_dia < dentista.max_overbook_day:
                     try:
-                        return Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True)
+                        reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True)
+                        self._send_confirmation_email(reserva) # Envío
+                        return reserva
                     except IntegrityError:
                         # Si falla por constraint único, buscar la reserva existente
                         existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                         if existing_reserva:
+                            self._send_confirmation_email(existing_reserva) # Envío
                             return existing_reserva
                         raise
 
             from rest_framework import serializers as drf_serializers
             raise drf_serializers.ValidationError({'detail': 'El slot está lleno y no se permiten sobrecupos adicionales.'})
-
-
 
 
 class RegionSerializer(serializers.ModelSerializer):

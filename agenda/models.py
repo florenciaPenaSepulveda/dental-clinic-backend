@@ -16,7 +16,7 @@ class Region(models.Model):
 
 class Paciente(models.Model):
   
-    rut = models.CharField(max_length=12, null=False, blank=False) 
+    rut = models.CharField(max_length=15, unique=True, help_text='RUT del paciente (ej: 12.345.678-9)')
     nombre = models.CharField(max_length=100)
     apellido = models.CharField(max_length=100)
     telefono = models.CharField(max_length=20, blank=True)

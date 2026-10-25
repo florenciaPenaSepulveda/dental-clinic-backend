@@ -1,0 +1,14 @@
+node_modules/
+venv/
+.venv/
+__pycache__/
+dist/
+build/
+coverage/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+.idea/
+.DS_Store
+postgres-data/
