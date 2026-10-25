@@ -22,6 +22,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Análisis estático
+        run: python -m pyflakes agenda backendClinica manage.py
+
       - name: Migraciones
         run: python manage.py migrate --noinput
 

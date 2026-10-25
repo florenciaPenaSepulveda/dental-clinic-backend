@@ -6,3 +6,7 @@ __pycache__
 *.sqlite3
 .coverage
 .env
+.env.*
+media
+staticfiles
+htmlcov
