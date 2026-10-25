@@ -61,6 +61,7 @@ Todas son opcionales mientras `DEBUG` esté activo; sin ellas se usan valores de
 | `DEBUG` | `True` o `False` |
 | `ALLOWED_HOSTS` | Hosts permitidos separados por coma |
 | `SQLITE_PATH` | Ruta del archivo de base de datos |
+| `MEDIA_ROOT` | Carpeta donde se guardan los exámenes adjuntos (por defecto `media/`) |
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
 | `DEFAULT_FROM_EMAIL` | Remitente de los correos |
 | `DEMO_STAFF_PASSWORD` | Contraseña del usuario `recepcion` que crea `seed_data --demo` (por defecto `recepcion123`) |
@@ -86,15 +87,30 @@ Prefijo `/agenda/`.
 | `POST /dentistas/{id}/generar_slots/` | Genera horarios (`fecha`, `desde`, `hasta`, `dias`) |
 | `POST /reservas/` | Crea una reserva con `slot` o con `dentista`, `fecha` y `hora_inicio`, más `paciente` |
 | `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
-| `POST /auth/login/` | Inicia sesión del personal (`username`, `password`) y devuelve un token |
+| `POST /auth/login/` | Inicia sesión (`username` o RUT, `password`) y devuelve un token con el rol (`recepcion`, `dentista` o `paciente`) |
+| `POST /auth/activar-cuenta/` | Un paciente crea su cuenta con su RUT, el correo registrado en la clínica y una contraseña |
 | `POST /auth/logout/`, `GET /auth/me/` | Cierra la sesión / devuelve el usuario actual (requieren token) |
+| `GET /semana/?desde=AAAA-MM-DD&dentista=1` | Horarios de 7 días con el detalle de sus reservas (personal) |
+| `PATCH /api/reservas/{id}/` | Cambia estado, observaciones, servicio o reprograma la reserva (personal) |
+| `POST /api/reservas/{id}/archivos/`, `GET/DELETE /archivos/{id}/` | Sube, descarga o elimina exámenes adjuntos |
+| `PUT /api/reservas/{id}/atencion/` | El dentista registra diagnóstico, procedimiento e indicaciones |
+| `GET /api/pacientes/{id}/historial/` | Historial clínico del paciente (personal) |
+| `GET /mi/historial/` | Citas próximas e historial del paciente que inició sesión |
 | `/api/regiones/`, `/api/dentistas/`, `/api/servicios/`, `/api/pacientes/`, `/api/reservas/` | CRUD de cada recurso (`?region=` para dentistas; `?dentista=` y `?fecha=` para reservas) |
 
 ### Acceso y permisos
 
-Las operaciones del público son: consultar dentistas, servicios y horarios (con la cantidad de reservas de cada horario, sin datos de pacientes), buscar un paciente por RUT, registrarse como paciente y reservar una hora. Todo lo demás exige un token de personal en la cabecera `Authorization: Token <token>`: listar, editar o eliminar pacientes, listar o cancelar reservas, generar horarios y modificar el catálogo. Un usuario sin `is_staff` no puede iniciar sesión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
+Las operaciones del público son: consultar dentistas, servicios y horarios (con la cantidad de reservas de cada horario, sin datos de pacientes), buscar un paciente por RUT, registrarse como paciente y reservar una hora, opcionalmente adjuntando exámenes. Todo lo demás exige un token en la cabecera `Authorization: Token <token>` y depende del rol:
 
-Crea una cuenta de personal con `python manage.py createsuperuser`. `seed_data --demo` crea además el usuario `recepcion` (contraseña `recepcion123`, o la de la variable `DEMO_STAFF_PASSWORD`), pensado solo para demostración.
+| Rol | Cómo se define | Qué puede hacer |
+|---|---|---|
+| Recepción | Usuario con `is_staff` | Ver y modificar todo: pacientes, reservas, agenda de cualquier dentista y catálogo. Lee las atenciones clínicas, pero no las escribe |
+| Dentista | Usuario enlazado al campo `usuario` de un dentista | Ver solo sus pacientes, sus reservas y su agenda; registrar la atención clínica de sus reservas |
+| Paciente | Usuario enlazado al campo `usuario` de un paciente | Ver solo su propio historial, con el profesional que lo atendió |
+
+Las observaciones internas de una reserva solo las ven recepción y el dentista; el paciente ve el motivo, el diagnóstico, el procedimiento y las indicaciones. Los exámenes se guardan fuera de las rutas públicas y solo se descargan con sesión, por quien tiene acceso a esa reserva. Se aceptan PDF, JPG y PNG de hasta 5 MB, máximo 5 por reserva, y se comprueba que el contenido corresponda a la extensión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
+
+Crea una cuenta de recepción con `python manage.py createsuperuser`. Para un dentista o un paciente, crea el usuario en `/admin/` y enlázalo en el campo `usuario` de su ficha. `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
 
 ## Pruebas
 
@@ -104,7 +120,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-85 pruebas con 98 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+129 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
