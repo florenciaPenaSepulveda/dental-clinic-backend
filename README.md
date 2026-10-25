@@ -59,7 +59,10 @@ Todas son opcionales mientras `DEBUG` esté activo; sin ellas se usan valores de
 |---|---|
 | `DJANGO_SECRET_KEY` | Clave secreta de Django (obligatoria con `DEBUG=False`) |
 | `DEBUG` | `True` o `False` |
-| `ALLOWED_HOSTS` | Hosts permitidos separados por coma |
+| `ALLOWED_HOSTS` | Hosts permitidos separados por coma (obligatoria con `DEBUG=False`) |
+| `CORS_ALLOWED_ORIGINS` | Orígenes del frontend autorizados, separados por coma (por defecto `http://localhost:5173`) |
+| `TOKEN_TTL_HORAS` | Horas de vigencia de una sesión antes de pedir el ingreso otra vez (por defecto 12) |
+| `SECURE_SSL_REDIRECT` | Con `DEBUG=False` redirige a HTTPS (por defecto `True`; desactívala solo si un proxy ya lo hace) |
 | `SQLITE_PATH` | Ruta del archivo de base de datos |
 | `MEDIA_ROOT` | Carpeta donde se guardan los exámenes adjuntos (por defecto `media/`) |
 | `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
@@ -85,7 +88,7 @@ Prefijo `/agenda/`.
 | `GET /slots/` | Horarios desde hoy en adelante |
 | `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1` | Horarios de un día, opcionalmente de un dentista |
 | `POST /dentistas/{id}/generar_slots/` | Genera horarios (`fecha`, `desde`, `hasta`, `dias`) |
-| `POST /reservas/` | Crea una reserva con `slot` o con `dentista`, `fecha` y `hora_inicio`, más `paciente` |
+| `POST /reservas/` | Crea una reserva en un horario existente (`slot`, o `dentista`, `fecha` y `hora_inicio`), más `paciente`; rechaza horarios que ya pasaron y no crea horarios nuevos |
 | `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
 | `POST /auth/login/` | Inicia sesión (`username` o RUT, `password`) y devuelve un token con el rol (`recepcion`, `dentista` o `paciente`) |
 | `POST /auth/activar-cuenta/` | Un paciente crea su cuenta con su RUT, el correo registrado en la clínica y una contraseña |
@@ -110,6 +113,8 @@ Las operaciones del público son: consultar dentistas, servicios y horarios (con
 | Dentista | Usuario enlazado al campo `usuario` de un dentista | Ver solo sus pacientes, sus reservas y su agenda; registrar la atención clínica de sus reservas |
 | Paciente | Usuario enlazado al campo `usuario` de un paciente | Ver solo su propio historial, con el profesional que lo atendió |
 
+Medidas de seguridad: las sesiones vencen a las 12 horas (`TOKEN_TTL_HORAS`); el público no ve el teléfono ni el correo completos de un paciente al buscarlo por RUT (solo recepción y dentistas); el ingreso, la búsqueda por RUT, el registro de pacientes y las reservas públicas tienen límite de solicitudes por IP; el CORS solo admite los orígenes configurados; con `DEBUG=False` se exigen `DJANGO_SECRET_KEY` y `ALLOWED_HOSTS`, y se activan HTTPS obligatorio, HSTS y cookies seguras.
+
 Las observaciones internas de una reserva solo las ven recepción y el dentista; el paciente ve el motivo, el diagnóstico, el procedimiento y las indicaciones. Los exámenes se guardan fuera de las rutas públicas y solo se descargan con sesión, por quien tiene acceso a esa reserva. Se aceptan PDF, JPG y PNG de hasta 5 MB, máximo 5 por reserva, y se comprueba que el contenido corresponda a la extensión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
 
 Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez. La contraseña temporal es de un solo uso: hasta que la persona la cambie desde Mi cuenta, la API responde 403 a todo salvo cambiar la contraseña y cerrar sesión, y el login informa `debe_cambiar_clave`. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
@@ -122,14 +127,13 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-147 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+172 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
 ```
 agenda/             modelos, serializadores, vistas, viewsets, pruebas y comandos
 backendClinica/     configuración del proyecto Django
-tools/run_seed.py   atajo para sembrar datos de ejemplo
 ```
 
 ## Nota de seguridad
