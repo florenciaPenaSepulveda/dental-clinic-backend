@@ -1,19 +1,17 @@
-
 services:
   backend:
     build: .
     ports:
       - "8000:8000"
-    volumes:
-      - .:/app
-      - backend_static:/app/static
-      - backend_media:/app/media
     environment:
-      - DEBUG=True
-      - ALLOWED_HOSTS=*
-      - CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-    command: python manage.py runserver 0.0.0.0:8000
+      DEBUG: "True"
+      ALLOWED_HOSTS: "*"
+      SQLITE_PATH: /data/db.sqlite3
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-dev-only-insecure-key-change-me}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+    volumes:
+      - clinica_data:/data
 
 volumes:
-  backend_static:
-  backend_media:
+  clinica_data:
