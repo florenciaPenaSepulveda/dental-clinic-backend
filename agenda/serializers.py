@@ -7,7 +7,7 @@ from .models import SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
 from django.core.mail import send_mail
 from django.conf import settings
 
-from .utils import es_correo_de_ejemplo
+from .utils import es_correo_de_ejemplo, normalizar_rut
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +205,17 @@ class PacienteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Paciente
         fields = ('id', 'rut', 'nombre', 'apellido', 'telefono', 'email', 'fecha_registro')
+
+    def validate_rut(self, value):
+        rut = normalizar_rut(value)
+        if rut is None:
+            raise serializers.ValidationError('El RUT ingresado no es válido.')
+        repetidos = Paciente.objects.filter(rut=rut)
+        if self.instance is not None:
+            repetidos = repetidos.exclude(pk=self.instance.pk)
+        if repetidos.exists():
+            raise serializers.ValidationError('Ya existe un paciente con este RUT.')
+        return rut
 
 
 class ReservaReadSerializer(serializers.ModelSerializer):
