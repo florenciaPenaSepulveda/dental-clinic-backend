@@ -7,6 +7,8 @@ from .models import SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
 from django.core.mail import send_mail
 from django.conf import settings
 
+from .utils import es_correo_de_ejemplo
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,12 +22,10 @@ class SlotAgendaSerializer(serializers.ModelSerializer):
 
 
 class ReservaCreateSerializer(serializers.Serializer):
-    # Campos principales del modelo Reserva
     slot = serializers.PrimaryKeyRelatedField(queryset=SlotAgenda.objects.all(), required=False, allow_null=True)
     paciente = serializers.IntegerField()
     servicio = serializers.IntegerField(required=False)
     
-    # Campos alternativos para crear el slot
     dentista = serializers.IntegerField(required=False)
     fecha = serializers.DateField(required=False)
     hora_inicio = serializers.TimeField(required=False)
@@ -36,9 +36,12 @@ class ReservaCreateSerializer(serializers.Serializer):
         paciente = reserva.paciente
         email_paciente = paciente.email
         
-        # Solo enviar si el paciente tiene un correo registrado
         if not email_paciente:
             logger.info("Paciente %s sin email: se omite el correo de confirmación", paciente.pk)
+            return
+
+        if es_correo_de_ejemplo(email_paciente):
+            logger.info("Correo de ejemplo (%s): se omite el envío", email_paciente)
             return
 
         asunto = "Confirmación de Hora Agendada"
@@ -81,17 +84,14 @@ La Clínica Dental.
         return data
 
     def create(self, validated_data):
-        # Extraer campos adicionales
         dentista_id = validated_data.pop('dentista', None)
         fecha = validated_data.pop('fecha', None)
         hora_inicio = validated_data.pop('hora_inicio', None)
         observaciones = validated_data.pop('observaciones', None)
         
-        # Obtener instancias de paciente y servicio
         paciente_data = validated_data.get('paciente')
         servicio_id = validated_data.get('servicio')
         
-        # Manejar si paciente es un objeto o un ID
         if isinstance(paciente_data, Paciente):
             paciente = paciente_data
         else:
@@ -107,7 +107,6 @@ La Clínica Dental.
         
         servicio = None
         if servicio_id:
-            # Manejar si servicio es un objeto o un ID
             if isinstance(servicio_id, Servicio):
                 servicio = servicio_id
             else:
@@ -119,13 +118,11 @@ La Clínica Dental.
                 except Servicio.DoesNotExist:
                     raise serializers.ValidationError(f"Servicio con ID {servicio_id} no existe")
         
-        # Si no hay slot, buscar o crear uno
         slot = validated_data.get('slot')
         if not slot and dentista_id and fecha and hora_inicio:
             try:
                 dentista = Dentista.objects.get(id=dentista_id)
                 
-                # Buscar slot existente
                 slot, created = SlotAgenda.objects.get_or_create(
                     dentista=dentista,
                     fecha=fecha,
@@ -142,46 +139,40 @@ La Clínica Dental.
         if not slot:
             raise serializers.ValidationError("No se pudo crear o encontrar un slot válido")
         
-        # Lógica transaccional común en clínicas: contar reservas con select_for_update
         
         with transaction.atomic():
-            # Primero verificar si ya existe esta reserva exacta
             existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
             if existing_reserva:
-                self._send_confirmation_email(existing_reserva) # Envío
+                self._send_confirmation_email(existing_reserva)
                 return existing_reserva
             
             reservas_actuales = slot.reservas.select_for_update().count()
             if reservas_actuales < slot.capacidad:
                 try:
                     reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False)
-                    self._send_confirmation_email(reserva) # Envío
+                    self._send_confirmation_email(reserva)
                     return reserva
                 except IntegrityError:
-                    # Si falla por constraint único, buscar la reserva existente
                     existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                     if existing_reserva:
-                        self._send_confirmation_email(existing_reserva) # Envío
+                        self._send_confirmation_email(existing_reserva)
                         return existing_reserva
                     raise
 
-            # Si capacidad alcanzada, permitir sobrecupo si el slot y el dentista lo permiten
             sobrecupos_actuales_slot = slot.reservas.filter(sobrecupo=True).count()
             if sobrecupos_actuales_slot < slot.max_overbook:
-                # comprobar límite diario del dentista
                 fecha = slot.fecha
                 dentista = slot.dentista
                 sobrecupos_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=fecha, sobrecupo=True).count()
                 if sobrecupos_dia < dentista.max_overbook_day:
                     try:
                         reserva = Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=True)
-                        self._send_confirmation_email(reserva) # Envío
+                        self._send_confirmation_email(reserva)
                         return reserva
                     except IntegrityError:
-                        # Si falla por constraint único, buscar la reserva existente
                         existing_reserva = Reserva.objects.filter(slot=slot, paciente=paciente).first()
                         if existing_reserva:
-                            self._send_confirmation_email(existing_reserva) # Envío
+                            self._send_confirmation_email(existing_reserva)
                             return existing_reserva
                         raise
 
