@@ -24,7 +24,7 @@ class DentistaViewSet(viewsets.ModelViewSet):
     permission_classes = [AllowAny]
     
     def get_queryset(self):
-        queryset = self.queryset
+        queryset = self.queryset.all()
         region_id = self.request.query_params.get('region', None)
         if region_id is not None:
             queryset = queryset.filter(region=region_id)
@@ -68,8 +68,8 @@ class ReservaViewSet(viewsets.ModelViewSet):
         }, status=201)
     
     def get_queryset(self):
-        queryset = self.queryset
-        
+        queryset = self.queryset.all()
+
         # Filtrar por dentista si se especifica
         dentista_id = self.request.query_params.get('dentista', None)
         if dentista_id is not None:

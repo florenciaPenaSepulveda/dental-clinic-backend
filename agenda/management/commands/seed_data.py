@@ -5,6 +5,18 @@ from agenda.slots_generator import generate_slots_range
 import datetime
 
 
+def rut_con_dv(cuerpo):
+    suma = 0
+    multiplicador = 2
+    for digito in reversed(str(cuerpo)):
+        suma += int(digito) * multiplicador
+        multiplicador = 2 if multiplicador == 7 else multiplicador + 1
+    resto = 11 - (suma % 11)
+    dv = '0' if resto == 11 else 'K' if resto == 10 else str(resto)
+    texto = f"{cuerpo:,}".replace(',', '.')
+    return f"{texto}-{dv}"
+
+
 class Command(BaseCommand):
     help = 'Siembra datos de ejemplo: dentistas, servicios y pacientes. Opcionalmente genera slots para N días.'
 
@@ -59,9 +71,13 @@ class Command(BaseCommand):
                 nombre = f'Paciente{i}'
                 apellido = f'Ejemplo {i}'
                 paciente, p_created = Paciente.objects.get_or_create(
-                    nombre=nombre,
-                    apellido=apellido,
-                    defaults={'telefono': f'+000000000{i:02d}', 'email': f'paciente{i}@example.com'}
+                    rut=rut_con_dv(15000000 + i),
+                    defaults={
+                        'nombre': nombre,
+                        'apellido': apellido,
+                        'telefono': f'+5691234{i:04d}',
+                        'email': f'paciente{i}@example.com',
+                    },
                 )
                 if p_created:
                     created['pacientes'] += 1

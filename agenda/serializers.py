@@ -1,9 +1,13 @@
+import logging
+
 from rest_framework import serializers
 from django.db import IntegrityError
-from django.db import transaction  # <--- ¡IMPORTACIÓN FALTANTE AGREGADA AQUÍ!
+from django.db import transaction
 from .models import SlotAgenda, Reserva, Servicio, Dentista, Paciente, Region
 from django.core.mail import send_mail
-from django.conf import settings 
+from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class SlotAgendaSerializer(serializers.ModelSerializer):
@@ -34,7 +38,7 @@ class ReservaCreateSerializer(serializers.Serializer):
         
         # Solo enviar si el paciente tiene un correo registrado
         if not email_paciente:
-            print(f"DEBUG: Paciente {paciente.nombre} no tiene email. Envío omitido.")
+            logger.info("Paciente %s sin email: se omite el correo de confirmación", paciente.pk)
             return
 
         asunto = "Confirmación de Hora Agendada"
@@ -63,14 +67,12 @@ La Clínica Dental.
                 [email_paciente],
                 fail_silently=False
             )
-            print(f"DEBUG: Correo enviado a {email_paciente} por reserva ID {reserva.id}")
+            logger.info("Correo de confirmación enviado para la reserva %s", reserva.pk)
         except Exception as e:
-            print(f"ERROR: No se pudo enviar el correo de confirmación. Detalle: {e}")
-            # El error de envío de correo no debe bloquear la creación de la reserva
+            logger.warning("No se pudo enviar el correo de la reserva %s: %s", reserva.pk, e)
 
 
     def validate(self, data):
-        # ... (Tu código de validación existente) ...
         if not data.get('slot'):
             if not all([data.get('dentista'), data.get('fecha'), data.get('hora_inicio')]):
                 raise serializers.ValidationError(
@@ -79,14 +81,6 @@ La Clínica Dental.
         return data
 
     def create(self, validated_data):
-        # ... (Tu código existente para extraer y obtener instancias de modelos) ...
-        print("=== DEBUG SERIALIZER CREATE ===")
-        print("validated_data:", validated_data)
-        print("Tipos de datos:")
-        for key, value in validated_data.items():
-            print(f"  {key}: {type(value)} = {value}")
-        print("================================")
-        
         # Extraer campos adicionales
         dentista_id = validated_data.pop('dentista', None)
         fecha = validated_data.pop('fecha', None)
