@@ -6,6 +6,18 @@ API REST para la gestión de agenda de una clínica dental: dentistas, servicios
 
 Construida con **Django 4.2**, **Django REST Framework** y SQLite.
 
+## Inicio rápido
+
+```
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env                                 # Windows: copy .env.example .env
+python manage.py migrate && python manage.py seed_data --demo
+python manage.py runserver
+```
+
+API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 179 con 99 % de cobertura.
+
 ## Repositorios del proyecto
 
 | Repositorio | Descripción |
