@@ -3,10 +3,12 @@ import re
 
 from django.conf import settings
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError as ErrorDeDjango
 from django.db import IntegrityError, transaction
 from django.utils.formats import date_format
 from rest_framework import serializers
 
+from .ocupacion import validar_espacio
 from .models import ArchivoReserva, Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
 from .utils import es_correo_de_ejemplo, horario_pasado, normalizar_rut
 
@@ -25,12 +27,27 @@ class SlotAgendaSerializer(serializers.ModelSerializer):
         fields = ('id', 'dentista', 'servicio', 'fecha', 'hora', 'capacidad', 'max_overbook')
 
 
+def _validar_espacio(slot, servicio, excluir=None):
+    try:
+        validar_espacio(slot, servicio, excluir=excluir)
+    except ErrorDeDjango as error:
+        raise serializers.ValidationError({'detail': ' '.join(error.messages)})
+
+
 class SlotDisponibilidadSerializer(SlotAgendaSerializer):
     reservas_count = serializers.IntegerField(read_only=True)
     sobrecupos_count = serializers.IntegerField(read_only=True)
+    bloqueado = serializers.SerializerMethodField()
+    cabe = serializers.SerializerMethodField()
 
     class Meta(SlotAgendaSerializer.Meta):
-        fields = SlotAgendaSerializer.Meta.fields + ('reservas_count', 'sobrecupos_count')
+        fields = SlotAgendaSerializer.Meta.fields + ('reservas_count', 'sobrecupos_count', 'bloqueado', 'cabe')
+
+    def get_bloqueado(self, slot):
+        return self.context.get('disponibilidad', {}).get(slot.id, {}).get('bloqueado', False)
+
+    def get_cabe(self, slot):
+        return self.context.get('disponibilidad', {}).get(slot.id, {}).get('cabe', True)
 
 
 class ReservaCreateSerializer(serializers.Serializer):
@@ -74,12 +91,15 @@ class ReservaCreateSerializer(serializers.Serializer):
                 if existente:
                     self.reutilizada = True
                     return existente
+                sobrecupo = self._es_sobrecupo(slot)
+                if not sobrecupo:
+                    _validar_espacio(slot, validated_data.get('servicio'))
                 reserva = Reserva.objects.create(
                     slot=slot,
                     paciente=paciente,
                     servicio=validated_data.get('servicio'),
                     motivo=validated_data.get('motivo', ''),
-                    sobrecupo=self._es_sobrecupo(slot),
+                    sobrecupo=sobrecupo,
                 )
         except IntegrityError:
             self.reutilizada = True
@@ -141,6 +161,22 @@ class ServicioSerializer(serializers.ModelSerializer):
     class Meta:
         model = Servicio
         fields = ('id', 'nombre', 'duracion_min', 'precio')
+
+    def validate_nombre(self, valor):
+        valor = valor.strip()
+        if not valor:
+            raise serializers.ValidationError('Ingresa el nombre del servicio.')
+        return valor
+
+    def validate_duracion_min(self, valor):
+        if valor < 15 or valor > 240 or valor % 15:
+            raise serializers.ValidationError('La duración debe estar entre 15 y 240 minutos, en múltiplos de 15.')
+        return valor
+
+    def validate_precio(self, valor):
+        if valor < 0:
+            raise serializers.ValidationError('El precio no puede ser negativo.')
+        return valor
 
 
 class PacienteSerializer(serializers.ModelSerializer):
@@ -227,15 +263,24 @@ class ReservaActualizarSerializer(serializers.ModelSerializer):
                 data['sobrecupo'] = True
             else:
                 raise serializers.ValidationError({'slot': 'El horario elegido está lleno.'})
+        if 'slot' in data or 'servicio' in data:
+            destino = data.get('slot') or self.instance.slot
+            servicio = data['servicio'] if 'servicio' in data else self.instance.servicio
+            if not data.get('sobrecupo', self.instance.sobrecupo):
+                _validar_espacio(destino, servicio, excluir=self.instance)
         return data
 
 
 class SlotSemanaSerializer(serializers.ModelSerializer):
     reservas = ReservaDetalleSerializer(many=True, read_only=True)
+    bloqueado = serializers.SerializerMethodField()
 
     class Meta:
         model = SlotAgenda
-        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas')
+        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas', 'bloqueado')
+
+    def get_bloqueado(self, slot):
+        return (slot.dentista_id, slot.fecha, slot.hora) in self.context.get('bloqueados', set())
 
 
 class HistorialSerializer(_ConAtencion, serializers.ModelSerializer):

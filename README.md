@@ -16,7 +16,7 @@ python manage.py migrate && python manage.py seed_data --demo
 python manage.py runserver
 ```
 
-API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 184 con 99 % de cobertura.
+API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 204 con 99 % de cobertura.
 
 ## Repositorios del proyecto
 
@@ -120,7 +120,7 @@ Prefijo `/agenda/`.
 | Método y ruta | Descripción |
 |---|---|
 | `GET /slots/` | Horarios desde hoy en adelante |
-| `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1` | Horarios de un día, opcionalmente de un dentista |
+| `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1&servicio_id=2` | Horarios de un día, opcionalmente de un dentista. Cada horario indica `bloqueado` (lo cubre la duración de una cita anterior) y `cabe` (el servicio pedido entra desde ese horario) |
 | `POST /dentistas/{id}/generar_slots/` | Genera bloques de 30 minutos entre `desde` y `hasta` (el último termina a la hora final; entre 08:00 y 18:00) durante `dias` días seguidos desde `fecha`. Responde `created` (nuevos) y `existing` (ya existían) |
 | `POST /reservas/` | Crea una reserva en un horario existente (`slot`, o `dentista`, `fecha` y `hora_inicio`), más `paciente`; rechaza horarios que ya pasaron y no crea horarios nuevos |
 | `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
@@ -157,6 +157,12 @@ Las observaciones internas de una reserva solo las ven recepción y el dentista;
 
 Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez. La contraseña temporal es de un solo uso: hasta que la persona la cambie desde Mi cuenta, la API responde 403 a todo salvo cambiar la contraseña y cerrar sesión, y el login informa `debe_cambiar_clave`. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
 
+## Duración de los servicios
+
+Cada servicio tiene una duración (15 a 240 minutos, en múltiplos de 15) que recepción puede editar en `/api/servicios/`. Los horarios son bloques de 30 minutos y una reserva ocupa tantos bloques seguidos como necesite su servicio, redondeando hacia arriba: 30 minutos ocupa 1 bloque, 45 o 60 ocupan 2 y 90 ocupa 3. Los bloques siguientes quedan bloqueados para otras reservas.
+
+Al reservar, mover una reserva o cambiarle el servicio, el sistema rechaza (400) un horario que ya está cubierto por una cita anterior y un servicio que no cabe porque falta un horario seguido, está reservado o ya pasó el cierre. Una reserva sin servicio ocupa un solo bloque y los sobrecupos no bloquean horarios.
+
 ## Pruebas
 
 ```
@@ -165,7 +171,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-184 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+204 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 

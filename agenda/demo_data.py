@@ -3,9 +3,11 @@ import os
 import random
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
+from .ocupacion import validar_espacio
 from .slots_generator import generate_slots_for_day
 from .utils import rut_con_dv
 
@@ -111,14 +113,23 @@ def _crear_reservas(rng, pacientes, servicios, hoy):
     slots = list(SlotAgenda.objects.filter(fecha__gte=hoy, fecha__lt=hoy + datetime.timedelta(days=7)).order_by("fecha", "hora", "dentista_id"))
     rng.shuffle(slots)
     creadas = 0
+    reservados = []
     disponibles = list(pacientes)
-    for slot in slots[:30]:
+    for slot in slots:
+        if creadas == 30:
+            break
+        servicio = rng.choice(servicios)
+        try:
+            validar_espacio(slot, servicio)
+        except ValidationError:
+            continue
         if len(disponibles) < 2:
             disponibles = list(pacientes)
         paciente = disponibles.pop(rng.randrange(len(disponibles)))
-        Reserva.objects.create(slot=slot, paciente=paciente, servicio=rng.choice(servicios), sobrecupo=False)
+        Reserva.objects.create(slot=slot, paciente=paciente, servicio=servicio, sobrecupo=False)
+        reservados.append(slot)
         creadas += 1
-    for slot in slots[:5]:
+    for slot in reservados[:5]:
         sobrecupos_dia = Reserva.objects.filter(slot__dentista=slot.dentista, slot__fecha=slot.fecha, sobrecupo=True).count()
         if slot.max_overbook and sobrecupos_dia < slot.dentista.max_overbook_day:
             ocupados = set(slot.reservas.values_list("paciente_id", flat=True))

@@ -195,7 +195,11 @@ class ReservaViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         archivos = request.FILES.getlist('archivos')
         validar_archivos(archivos)
-        serializer = self.get_serializer(data=request.data)
+        datos = request.data.copy()
+        perfil = getattr(request.user, 'paciente_perfil', None)
+        if perfil is not None:
+            datos['paciente'] = perfil.id
+        serializer = self.get_serializer(data=datos)
         serializer.is_valid(raise_exception=True)
         instance = guardar_reserva(serializer, archivos)
 

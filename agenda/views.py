@@ -10,8 +10,9 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 
 from .archivos import guardar_reserva, validar_archivos
-from .models import Dentista, SlotAgenda
+from .models import Dentista, Servicio, SlotAgenda
 from .permissions import EsPersonal, perfil_dentista
+from .ocupacion import disponibilidad
 from .serializers import ReservaCreateSerializer, SlotAgendaSerializer, SlotDisponibilidadSerializer
 from .slots_generator import blocks_per_day, generate_slots_range
 from .throttles import ReservaThrottle
@@ -110,4 +111,11 @@ def slots_por_fecha(request):
         if not dentista_id.isdigit():
             return _error('El identificador del dentista debe ser numérico.')
         slots = slots.filter(dentista_id=dentista_id)
-    return Response(SlotDisponibilidadSerializer(slots.order_by('fecha', 'hora'), many=True).data)
+    servicio = None
+    if request.GET.get('servicio_id'):
+        if not request.GET['servicio_id'].isdigit():
+            return _error('El identificador del servicio debe ser numérico.')
+        servicio = Servicio.objects.filter(pk=request.GET['servicio_id']).first()
+    lista = list(slots.order_by('fecha', 'hora'))
+    contexto = {'disponibilidad': disponibilidad(lista, servicio)}
+    return Response(SlotDisponibilidadSerializer(lista, many=True, context=contexto).data)
