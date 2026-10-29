@@ -35,6 +35,11 @@ API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 179 con 
 
 ## Demostración en línea
 
+- **API:** https://dental-clinic-backend-4eov.onrender.com/agenda/api/dentistas/
+- **Interfaz:** https://dental-clinic-frontend-sjnv.onrender.com
+
+Cuentas de demostración (datos ficticios): `recepcion`, `dr.rojas` y el RUT `14.000.000-0` (paciente), todas con la contraseña `Demo-h1eur-Clinica-6l8ax`.
+
 La demo se publica como *Web Service* en el plan gratuito de Render. Los datos **se reinician**: la base es SQLite y el plan gratuito borra el disco cuando el servicio se duerme (tras unos 15 minutos sin uso) o se redespliega, y lo mismo ocurre con los archivos subidos. Es intencional: el comando de inicio vuelve a ejecutar `seed_data --demo` (idempotente) en cada arranque, así que quien pruebe la demo siempre la encuentra con datos de ejemplo ordenados. La primera visita tras un periodo de inactividad puede tardar hasta un minuto.
 
 | Campo en Render | Valor |
