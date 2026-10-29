@@ -6,6 +6,20 @@ API REST para la gestión de agenda de una clínica dental: dentistas, servicios
 
 Construida con **Django 5.2**, **Django REST Framework** y SQLite.
 
+## Probar la demo
+
+**API:** https://dental-clinic-backend-4eov.onrender.com/agenda/api/dentistas/ · **Interfaz:** https://dental-clinic-frontend-sjnv.onrender.com
+
+| Rol | Usuario | Contraseña | Qué puedes probar |
+|---|---|---|---|
+| Recepción | `recepcion` | `Demo-h1eur-Clinica-6l8ax` | Agenda, pacientes, equipo, servicios y generación de horarios |
+| Dentista | `dr.rojas` | `Demo-h1eur-Clinica-6l8ax` | Su agenda, sus pacientes y la ficha clínica de cada atención |
+| Paciente | `14.000.000-0` (su RUT) | `Demo-h1eur-Clinica-6l8ax` | Reservar a su nombre y ver su historial |
+
+Sin iniciar sesión también puedes **reservar una hora** desde "Reservar hora". Son cuentas de demostración con datos ficticios.
+
+> **Los datos se reinician** cuando el servidor se duerme (unos 15 minutos sin uso) o se actualiza la demo, y la primera carga puede tardar hasta un minuto. Lo que crees (cuentas, reservas) no se conserva; las cuentas de arriba siempre vuelven a existir.
+
 ## Inicio rápido
 
 ```
@@ -18,13 +32,6 @@ python manage.py runserver
 
 API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 204 con 99 % de cobertura.
 
-## Repositorios del proyecto
-
-| Repositorio | Descripción |
-|---|---|
-| **dental-clinic-backend** (este) | API REST de agenda y reservas |
-| [dental-clinic-frontend](https://github.com/florenciaPenaSepulveda/dental-clinic-frontend) | Interfaz web para reservar y administrar la agenda |
-
 ## Funcionalidades
 
 - Catálogos de regiones, dentistas, servicios y pacientes (RUT único por paciente, validado con su dígito verificador y guardado siempre como `12.345.678-5`).
@@ -32,136 +39,14 @@ API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 204 con 
 - Generación masiva de horarios por día o por rango de días.
 - Reservas transaccionales: si el horario está lleno, se permite **sobrecupo** solo mientras no se superen el límite del horario ni el límite diario del dentista.
 - Correo de confirmación al paciente (si tiene email); un fallo del correo nunca bloquea la reserva.
+- Duración por servicio: una reserva ocupa los bloques seguidos que necesite su servicio, y cambiar una duración detecta las citas que dejarían de caber.
+- Roles (recepción, dentista y paciente) con permisos por vista y sesiones con vencimiento.
 
-## Demostración en línea
+## Documentación
 
-- **API:** https://dental-clinic-backend-4eov.onrender.com/agenda/api/dentistas/
-- **Interfaz:** https://dental-clinic-frontend-sjnv.onrender.com
-
-Cuentas de demostración (datos ficticios): `recepcion`, `dr.rojas` y el RUT `14.000.000-0` (paciente), todas con la contraseña `Demo-h1eur-Clinica-6l8ax`.
-
-La demo se publica como *Web Service* en el plan gratuito de Render. Los datos **se reinician**: la base es SQLite y el plan gratuito borra el disco cuando el servicio se duerme (tras unos 15 minutos sin uso) o se redespliega, y lo mismo ocurre con los archivos subidos. Es intencional: el comando de inicio vuelve a ejecutar `seed_data --demo` (idempotente) en cada arranque, así que quien pruebe la demo siempre la encuentra con datos de ejemplo ordenados. La primera visita tras un periodo de inactividad puede tardar hasta un minuto.
-
-| Campo en Render | Valor |
-|---|---|
-| Runtime | Python 3 (`PYTHON_VERSION=3.11.9`) |
-| Build Command | `pip install -r requirements.txt && python manage.py collectstatic --noinput` |
-| Start Command | `python manage.py migrate --noinput && python manage.py seed_data --demo && gunicorn backendClinica.wsgi:application --bind 0.0.0.0:$PORT --workers 2` |
-| `DJANGO_SECRET_KEY` | cadena aleatoria larga |
-| `ALLOWED_HOSTS` | `<tu-backend>.onrender.com` (sin `https://`) |
-| `CORS_ALLOWED_ORIGINS` | URL del frontend, sin `/` final |
-| `DEMO_STAFF_PASSWORD` | (opcional) contraseña de las cuentas de demostración |
-
-Para conservar datos entre reinicios haría falta una base externa (por ejemplo PostgreSQL) y almacenamiento para los archivos; para una demo pública se prefirió el estado limpio y no tener que mantener ninguno de los dos.
-
-## Requisitos
-
-- Python 3.11
-- (Opcional) Docker
-
-## Puesta en marcha
-
-```
-python -m venv .venv
-.venv\Scripts\activate        # En Linux/macOS: source .venv/bin/activate
-pip install -r requirements.txt
-copy .env.example .env        # En Linux/macOS: cp .env.example .env
-python manage.py migrate
-python manage.py seed_data --demo
-python manage.py runserver
-```
-
-La API queda en `http://localhost:8000/agenda/`. El panel de administración está en `/admin/` (crea un usuario con `python manage.py createsuperuser`).
-
-`seed_data --demo` carga un conjunto completo de demostración: 3 regiones, 5 dentistas con distintas especialidades, 7 servicios con precio, 24 pacientes (con RUT válido), unos 650 horarios para los próximos 14 días hábiles y alrededor de 35 reservas, algunas de ellas sobrecupos. Se puede ejecutar varias veces sin duplicar datos. Sin `--demo`, el comando crea datos genéricos (`--dentistas`, `--servicios`, `--pacientes` y `--generate-slots N`).
-
-Los correos de los pacientes de demostración usan `example.com`, un dominio reservado: el sistema nunca les envía confirmaciones. Para recibir una confirmación real, registra un paciente con tu propio correo.
-
-### Con Docker
-
-```
-docker compose up --build
-```
-
-Aplica las migraciones al iniciar y guarda la base en un volumen. Disponible en `http://localhost:8000`.
-
-## Variables de entorno
-
-Por seguridad, `DEBUG` está apagado por defecto: sin él, `DJANGO_SECRET_KEY` y `ALLOWED_HOSTS` son obligatorias y el servidor no arranca sin ellas. Para trabajar en local copia `.env.example` a `.env`, que activa `DEBUG=True` y valores de desarrollo. Se cargan automáticamente desde un archivo `.env` en la raíz del proyecto (copia `.env.example`); ese archivo está en `.gitignore` y nunca se sube a GitHub. Con Docker, `docker compose` también lee ese mismo archivo.
-
-| Variable | Descripción |
-|---|---|
-| `DJANGO_SECRET_KEY` | Clave secreta de Django (obligatoria con `DEBUG=False`) |
-| `DEBUG` | `True` solo en desarrollo; por defecto `False` |
-| `ALLOWED_HOSTS` | Hosts permitidos separados por coma (obligatoria con `DEBUG=False`) |
-| `CORS_ALLOWED_ORIGINS` | Orígenes del frontend autorizados, separados por coma (por defecto `http://localhost:5173`) |
-| `TOKEN_TTL_HORAS` | Horas de vigencia de una sesión antes de pedir el ingreso otra vez (por defecto 12) |
-| `SECURE_SSL_REDIRECT` | Con `DEBUG=False` redirige a HTTPS (por defecto `True`; desactívala solo si un proxy ya lo hace) |
-| `SQLITE_PATH` | Ruta del archivo de base de datos |
-| `MEDIA_ROOT` | Carpeta donde se guardan los exámenes adjuntos (por defecto `media/`) |
-| `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` | Cuenta de Gmail y contraseña de aplicación para enviar los correos |
-| `DEFAULT_FROM_EMAIL` | Remitente de los correos |
-| `DEMO_STAFF_PASSWORD` | Contraseña del usuario `recepcion` que crea `seed_data --demo` (por defecto `recepcion123`) |
-
-Django no lee `.env` por sí solo: `settings.py` lo carga con `python-dotenv` y nunca pisa variables que ya existan en el entorno. En desarrollo basta el archivo `.env`; en producción se definen variables de entorno reales en el servidor o en la plataforma de despliegue (Render, Docker, etc.) y no se despliega ningún `.env`.
-
-### Envío de correos
-
-1. Activa la verificación en dos pasos en la cuenta de Gmail.
-2. Crea una contraseña de aplicación en myaccount.google.com/apppasswords (16 caracteres).
-3. Escribe tu correo en `EMAIL_HOST_USER` y esa contraseña en `EMAIL_HOST_PASSWORD` dentro de `.env`, y reinicia el servidor.
-
-Sin credenciales de correo, los mensajes se imprimen en la consola del servidor. Las pruebas automáticas nunca envían correos reales.
-
-## Endpoints principales
-
-Prefijo `/agenda/`.
-
-| Método y ruta | Descripción |
-|---|---|
-| `GET /slots/` | Horarios desde hoy en adelante |
-| `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1&servicio_id=2` | Horarios de un día, opcionalmente de un dentista. Cada horario indica `bloqueado` (lo cubre la duración de una cita anterior) y `cabe` (el servicio pedido entra desde ese horario) |
-| `POST /dentistas/{id}/generar_slots/` | Genera bloques de 30 minutos entre `desde` y `hasta` (el último termina a la hora final; entre 08:00 y 18:00) durante `dias` días seguidos desde `fecha`. Responde `created` (nuevos) y `existing` (ya existían) |
-| `POST /reservas/` | Crea una reserva en un horario existente (`slot`, o `dentista`, `fecha` y `hora_inicio`), más `paciente`; rechaza horarios que ya pasaron y no crea horarios nuevos |
-| `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
-| `POST /auth/login/` | Inicia sesión (`username` o RUT, `password`) y devuelve un token con el rol (`recepcion`, `dentista` o `paciente`) |
-| `POST /auth/activar-cuenta/` | Un paciente crea su cuenta con su RUT, el correo registrado en la clínica y una contraseña |
-| `POST /auth/logout/`, `GET /auth/me/` | Cierra la sesión / devuelve el usuario actual (requieren token) |
-| `POST /auth/cambiar-clave/` | Cambia la contraseña del usuario con sesión (`actual`, `nueva`) y devuelve un token nuevo |
-| `POST /api/dentistas/{id}/cuenta/`, `POST /api/pacientes/{id}/cuenta/` | Recepción crea la cuenta de acceso o restablece su contraseña; devuelve el usuario y una contraseña temporal |
-| `GET /semana/?desde=AAAA-MM-DD&dentista=1` | Horarios de 7 días con el detalle de sus reservas (personal) |
-| `PATCH /api/reservas/{id}/` | Cambia estado, observaciones, servicio o reprograma la reserva (personal) |
-| `POST /api/reservas/{id}/archivos/`, `GET/DELETE /archivos/{id}/` | Sube, descarga o elimina exámenes adjuntos |
-| `PUT /api/reservas/{id}/atencion/` | El dentista registra diagnóstico, procedimiento e indicaciones |
-| `GET /api/pacientes/{id}/historial/` | Historial clínico del paciente (personal) |
-| `GET /mi/historial/` | Citas próximas e historial del paciente que inició sesión |
-| `/api/regiones/`, `/api/dentistas/`, `/api/servicios/`, `/api/pacientes/`, `/api/reservas/` | CRUD de cada recurso (`?region=` para dentistas; `?dentista=` y `?fecha=` para reservas) |
-
-### Listados
-
-Los listados de pacientes y de reservas vienen paginados (`count`, `next`, `previous`, `results`; 25 por página, con `?page=` y `?page_size=` hasta 100). `GET /api/pacientes/?q=` busca en el servidor por nombre, apellido, correo o RUT, con o sin puntos y guion, y todas las palabras deben coincidir.
-
-### Acceso y permisos
-
-Las operaciones del público son: consultar dentistas, servicios y horarios (con la cantidad de reservas de cada horario, sin datos de pacientes), buscar un paciente por RUT, registrarse como paciente y reservar una hora, opcionalmente adjuntando exámenes. Todo lo demás exige un token en la cabecera `Authorization: Token <token>` y depende del rol:
-
-| Rol | Cómo se define | Qué puede hacer |
-|---|---|---|
-| Recepción | Usuario con `is_staff` | Ver y modificar todo: pacientes, reservas, agenda de cualquier dentista y catálogo. Lee las atenciones clínicas, pero no las escribe |
-| Dentista | Usuario enlazado al campo `usuario` de un dentista | Ver solo sus pacientes, sus reservas y su agenda; registrar la atención clínica de sus reservas |
-| Paciente | Usuario enlazado al campo `usuario` de un paciente | Ver solo su propio historial, con el profesional que lo atendió |
-
-Medidas de seguridad: las sesiones vencen a las 12 horas (`TOKEN_TTL_HORAS`); el público no ve el teléfono ni el correo completos de un paciente al buscarlo por RUT (solo recepción y dentistas); el ingreso, la búsqueda por RUT, el registro de pacientes y las reservas públicas tienen límite de solicitudes por IP; el CORS solo admite los orígenes configurados; con `DEBUG=False` se exigen `DJANGO_SECRET_KEY` y `ALLOWED_HOSTS`, y se activan HTTPS obligatorio, HSTS y cookies seguras.
-
-Las observaciones internas de una reserva solo las ven recepción y el dentista; el paciente ve el motivo, el diagnóstico, el procedimiento y las indicaciones. Los exámenes se guardan fuera de las rutas públicas y solo se descargan con sesión, por quien tiene acceso a esa reserva. Se aceptan PDF, JPG y PNG de hasta 5 MB, máximo 5 por reserva, y se comprueba que el contenido corresponda a la extensión. El inicio de sesión se limita a 20 intentos por minuto y la búsqueda por RUT a 60 por minuto por dirección IP.
-
-Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez. La contraseña temporal es de un solo uso: hasta que la persona la cambie desde Mi cuenta, la API responde 403 a todo salvo cambiar la contraseña y cerrar sesión, y el login informa `debe_cambiar_clave`. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
-
-## Duración de los servicios
-
-Cada servicio tiene una duración (15 a 240 minutos, en múltiplos de 15) que recepción puede editar en `/api/servicios/`. Los horarios son bloques de 30 minutos y una reserva ocupa tantos bloques seguidos como necesite su servicio, redondeando hacia arriba: 30 minutos ocupa 1 bloque, 45 o 60 ocupan 2 y 90 ocupa 3. Los bloques siguientes quedan bloqueados para otras reservas.
-
-Al reservar, mover una reserva o cambiarle el servicio, el sistema rechaza (400) un horario que ya está cubierto por una cita anterior y un servicio que no cabe porque falta un horario seguido, está reservado o ya pasó el cierre. Una reserva sin servicio ocupa un solo bloque y los sobrecupos no bloquean horarios.
+- [API, permisos y seguridad](docs/api.md)
+- [Configuración, variables de entorno y datos de ejemplo](docs/configuracion.md)
+- [Despliegue de la demo en Render](docs/despliegue.md)
 
 ## Pruebas
 
@@ -180,11 +65,12 @@ agenda/             modelos, serializadores, vistas, viewsets, pruebas y comando
 backendClinica/     configuración del proyecto Django
 ```
 
-## Nota de seguridad
+## Repositorios del proyecto
 
-La autenticación usa tokens con expiración (`TOKEN_TTL_HORAS`, 12 por defecto) y los permisos se definen por rol (recepción, dentista, paciente) en cada vista. CORS solo admite los orígenes de `CORS_ALLOWED_ORIGINS`. Con `DEBUG` desactivado `DJANGO_SECRET_KEY` y `ALLOWED_HOSTS` son obligatorias, y se activan la redirección a HTTPS, las cookies seguras y HSTS.
-
-Las cuentas de `seed_data --demo` (`recepcion`, `dr.<apellido>` y tres pacientes) comparten una contraseña conocida y pública: son solo para demostración y nunca deben existir en un sistema con datos reales.
+| Repositorio | Descripción |
+|---|---|
+| **dental-clinic-backend** (este) | API REST de agenda y reservas |
+| [dental-clinic-frontend](https://github.com/florenciaPenaSepulveda/dental-clinic-frontend) | Interfaz web para reservar y administrar la agenda |
 
 ## Autoría
 
