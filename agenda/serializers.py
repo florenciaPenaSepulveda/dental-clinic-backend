@@ -274,10 +274,15 @@ class ReservaActualizarSerializer(serializers.ModelSerializer):
 class SlotSemanaSerializer(serializers.ModelSerializer):
     reservas = ReservaDetalleSerializer(many=True, read_only=True)
     bloqueado = serializers.SerializerMethodField()
+    conflictos = serializers.SerializerMethodField()
 
     class Meta:
         model = SlotAgenda
-        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas', 'bloqueado')
+        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas', 'bloqueado', 'conflictos')
+
+    def get_conflictos(self, slot):
+        encontrados = self.context.get('conflictos', {})
+        return [{'reserva': r.id, 'motivo': encontrados[r.id]} for r in slot.reservas.all() if r.id in encontrados]
 
     def get_bloqueado(self, slot):
         return (slot.dentista_id, slot.fecha, slot.hora) in self.context.get('bloqueados', set())

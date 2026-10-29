@@ -10,7 +10,7 @@ from rest_framework.response import Response
 
 from .models import ArchivoReserva, Reserva, SlotAgenda
 from .permissions import EsPaciente, EsPersonal, EsUsuarioConRol, PACIENTE, perfil_dentista, puede_ver_reserva, rol_de
-from .ocupacion import bloqueos_de
+from .ocupacion import bloqueos_de, reservas_en_conflicto
 from .serializers import HistorialSerializer, PacienteSerializer, SlotSemanaSerializer
 
 
@@ -32,12 +32,14 @@ def semana(request):
         return Response({'detail': 'Elige un dentista.'}, status=status.HTTP_400_BAD_REQUEST)
     slots = (
         SlotAgenda.objects.filter(dentista_id=dentista_id, fecha__range=(desde, desde + datetime.timedelta(days=6)))
-        .prefetch_related('reservas__paciente', 'reservas__servicio', 'reservas__archivos')
+        .prefetch_related('reservas__slot', 'reservas__paciente', 'reservas__servicio', 'reservas__archivos')
         .select_related('dentista')
         .order_by('fecha', 'hora')
     )
     lista = list(slots)
-    return Response(SlotSemanaSerializer(lista, many=True, context={'bloqueados': bloqueos_de(lista)}).data)
+    reservas = [reserva for slot in lista for reserva in slot.reservas.all()]
+    contexto = {'bloqueados': bloqueos_de(lista), 'conflictos': reservas_en_conflicto(reservas)}
+    return Response(SlotSemanaSerializer(lista, many=True, context=contexto).data)
 
 
 @api_view(['GET'])

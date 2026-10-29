@@ -1,5 +1,6 @@
 import datetime
 import math
+from collections import defaultdict
 
 from django.core.exceptions import ValidationError
 
@@ -57,6 +58,40 @@ def disponibilidad(slots, servicio=None):
                     break
         resultado[slot.id] = {'bloqueado': bloqueado, 'cabe': cabe}
     return resultado
+
+
+def reservas_en_conflicto(reservas, duraciones=None):
+    duraciones = duraciones or {}
+    reservas = [r for r in reservas if not r.sobrecupo]
+    if not reservas:
+        return {}
+    existentes = set(
+        SlotAgenda.objects.filter(
+            dentista_id__in={r.slot.dentista_id for r in reservas}, fecha__in={r.slot.fecha for r in reservas}
+        ).values_list('dentista_id', 'fecha', 'hora')
+    )
+    ocupantes = defaultdict(list)
+    cobertura = {}
+    for reserva in reservas:
+        slot = reserva.slot
+        if reserva.servicio_id in duraciones:
+            bloques = max(1, math.ceil(duraciones[reserva.servicio_id] / MINUTOS_POR_BLOQUE))
+        else:
+            bloques = bloques_de(reserva.servicio)
+        horas = [slot.hora] + _horas_siguientes(slot.fecha, slot.hora, bloques)
+        cobertura[reserva.id] = [(slot.dentista_id, slot.fecha, hora) for hora in horas]
+        for clave in cobertura[reserva.id]:
+            ocupantes[clave].append(reserva.id)
+    conflictos = {}
+    for reserva in reservas:
+        for clave in cobertura[reserva.id][1:]:
+            if clave not in existentes:
+                conflictos[reserva.id] = 'excede'
+                break
+            if len(ocupantes[clave]) > 1:
+                conflictos[reserva.id] = 'superpuesta'
+                break
+    return conflictos
 
 
 def validar_espacio(slot, servicio, excluir=None):

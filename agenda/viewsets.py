@@ -3,7 +3,8 @@ import re
 from django.db.models import Q, Value
 from django.db.models.functions import Replace
 from django.shortcuts import get_object_or_404
-from rest_framework import status, viewsets
+from django.utils import timezone
+from rest_framework import serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
@@ -11,6 +12,7 @@ from rest_framework.response import Response
 
 from .cuentas import crear_o_reiniciar_cuenta, usuario_de_dentista
 from .archivos import adjuntar_archivos, guardar_reserva, validar_archivos
+from .ocupacion import reservas_en_conflicto
 from .paginacion import PaginaEstandar
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio
 from .permissions import (
@@ -68,6 +70,42 @@ class ServicioViewSet(viewsets.ModelViewSet):
     queryset = Servicio.objects.all()
     serializer_class = ServicioSerializer
     permission_classes = [RecepcionOLectura]
+
+    def get_permissions(self):
+        if self.action == 'conflictos':
+            return [EsRecepcion()]
+        return super().get_permissions()
+
+    @action(detail=True, methods=['get'])
+    def conflictos(self, request, pk=None):
+        servicio = self.get_object()
+        try:
+            minutos = int(request.query_params.get('duracion_min', ''))
+            ServicioSerializer().validate_duracion_min(minutos)
+        except (TypeError, ValueError, serializers.ValidationError):
+            return Response({'detail': 'Indica una duración válida (15 a 240 minutos, en múltiplos de 15).'}, status=400)
+        reservas = list(
+            Reserva.objects.filter(slot__fecha__gte=timezone.localdate(), sobrecupo=False)
+            .select_related('slot__dentista', 'servicio', 'paciente')
+            .order_by('slot__fecha', 'slot__hora')
+        )
+        antes = reservas_en_conflicto(reservas)
+        despues = reservas_en_conflicto(reservas, {servicio.id: minutos})
+        filas = [
+            {
+                'id': r.id,
+                'fecha': r.slot.fecha,
+                'hora': r.slot.hora.strftime('%H:%M'),
+                'paciente': f"{r.paciente.nombre} {r.paciente.apellido}",
+                'dentista': f"{r.slot.dentista.nombre} {r.slot.dentista.apellido}",
+                'dentista_id': r.slot.dentista_id,
+                'servicio': r.servicio.nombre if r.servicio else None,
+                'motivo': despues[r.id],
+            }
+            for r in reservas
+            if r.id in despues and r.id not in antes
+        ]
+        return Response({'duracion_actual': servicio.duracion_min, 'duracion_nueva': minutos, 'conflictos': filas})
 
 
 class PacienteViewSet(viewsets.ModelViewSet):

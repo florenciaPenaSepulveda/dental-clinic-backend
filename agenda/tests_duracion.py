@@ -155,3 +155,52 @@ class ServiciosApiTests(APITestCase):
         self.assertEqual(self.client.get(f"{BASE}/api/servicios/").status_code, 200)
         self.assertIn(self.client.post(f"{BASE}/api/servicios/", {"nombre": "X", "duracion_min": 30, "precio": "1"}, format="json").status_code, (401, 403))
         self.assertIn(self.client.patch(f"{BASE}/api/servicios/{servicio.id}/", {"nombre": "Y"}, format="json").status_code, (401, 403))
+
+
+class ConflictosAlCambiarLaDuracionTests(DuracionBase):
+    def setUp(self):
+        super().setUp()
+        self.usuario = get_user_model().objects.create_user("recepcion", password="clave-segura-123", is_staff=True)
+        self.client.force_authenticate(self.usuario)
+
+    def conflictos(self, servicio, minutos):
+        return self.client.get(f"{BASE}/api/servicios/{servicio.id}/conflictos/", {"duracion_min": minutos})
+
+    def test_alargar_un_servicio_detecta_las_citas_que_se_superponen(self):
+        primera = self.reservar(self.slots[(16, 0)], self.s30).json()["id"]
+        self.reservar(self.slots[(16, 30)], self.s30, self.otro)
+        respuesta = self.conflictos(self.s30, 60)
+        self.assertEqual(respuesta.status_code, 200)
+        datos = respuesta.json()
+        self.assertEqual((datos["duracion_actual"], datos["duracion_nueva"]), (30, 60))
+        self.assertEqual([(c["id"], c["motivo"], c["hora"]) for c in datos["conflictos"]], [(primera, "superpuesta", "16:00")])
+        self.assertEqual(datos["conflictos"][0]["paciente"], "Juan Soto")
+
+    def test_detecta_las_citas_que_pasarian_del_cierre(self):
+        ultima = self.reservar(self.slots[(17, 30)], self.s30).json()["id"]
+        conflictos = self.conflictos(self.s30, 60).json()["conflictos"]
+        self.assertEqual([(c["id"], c["motivo"]) for c in conflictos], [(ultima, "excede")])
+
+    def test_acortar_o_conservar_la_duracion_no_genera_conflictos(self):
+        self.reservar(self.slots[(16, 0)], self.s60)
+        self.assertEqual(self.conflictos(self.s60, 30).json()["conflictos"], [])
+        self.assertEqual(self.conflictos(self.s60, 60).json()["conflictos"], [])
+
+    def test_no_informa_los_choques_que_ya_existian(self):
+        Servicio.objects.filter(pk=self.s30.pk).update(duracion_min=60)
+        self.reservar(self.slots[(16, 0)], self.s30)
+        self.assertEqual(self.conflictos(self.s30, 60).json()["conflictos"], [])
+
+    def test_valida_la_duracion_y_los_permisos(self):
+        self.assertEqual(self.conflictos(self.s30, 50).status_code, 400)
+        self.assertEqual(self.client.get(f"{BASE}/api/servicios/{self.s30.id}/conflictos/").status_code, 400)
+        self.client.force_authenticate(None)
+        self.assertIn(self.conflictos(self.s30, 60).status_code, (401, 403))
+
+    def test_la_agenda_semanal_marca_las_citas_en_choque(self):
+        primera = self.reservar(self.slots[(16, 0)], self.s30).json()["id"]
+        self.reservar(self.slots[(16, 30)], self.s30, self.otro)
+        Servicio.objects.filter(pk=self.s30.pk).update(duracion_min=60)
+        filas = self.client.get(f"{BASE}/semana/", {"desde": MANANA.isoformat(), "dentista": self.dentista.id}).json()
+        marcadas = [(fila["hora"][:5], fila["conflictos"]) for fila in filas if fila["conflictos"]]
+        self.assertEqual(marcadas, [("16:00", [{"reserva": primera, "motivo": "superpuesta"}])])
