@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from agenda.models import Dentista
-from agenda.slots_generator import generate_slots_for_day, generate_slots_range
+from agenda.slots_generator import blocks_per_day, generate_slots_for_day, generate_slots_range
 import datetime
 
 
@@ -34,10 +34,13 @@ class Command(BaseCommand):
         if dias <= 0:
             raise CommandError('dias debe ser mayor que 0')
 
+        if blocks_per_day(desde, hasta) == 0:
+            raise CommandError('La hora final debe ser posterior a la hora inicial')
+
         if dias == 1:
             created = generate_slots_for_day(dentista, fecha_obj, desde=desde, hasta=hasta)
         else:
             end_date = fecha_obj + datetime.timedelta(days=dias - 1)
             created = generate_slots_range(dentista, fecha_obj, end_date, desde=desde, hasta=hasta)
 
-        self.stdout.write(self.style.SUCCESS(f'Se crearon/validaron {created} slots para el dentista {dentista}'))
+        self.stdout.write(self.style.SUCCESS(f'Se crearon {created} slots nuevos para el dentista {dentista}'))

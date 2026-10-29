@@ -179,6 +179,9 @@ class SesionesConExpiracion(Base):
 
 
 class GenerarHorarios(Base):
+    def generados(self):
+        return SlotAgenda.objects.filter(dentista=self.dentista, fecha=MANANA).exclude(pk=self.slot.pk)
+
     def generar(self, **datos):
         self.client.force_authenticate(self.recepcion)
         return self.client.post(f"{BASE}/dentistas/{self.dentista.id}/generar_slots/", {"fecha": MANANA.isoformat(), **datos}, format="json")
@@ -196,9 +199,33 @@ class GenerarHorarios(Base):
         self.assertEqual(self.generar(desde="08:15", hasta="09:00").status_code, 400)
 
     def test_los_horarios_se_generan_una_sola_vez(self):
-        self.assertEqual(self.generar(desde="09:00", hasta="10:00").json()["created"], 3)
+        primera = self.generar(desde="09:00", hasta="10:00").json()
+        self.assertEqual((primera["created"], primera["existing"]), (2, 0))
+        segunda = self.generar(desde="09:00", hasta="10:00").json()
+        self.assertEqual((segunda["created"], segunda["existing"]), (0, 2))
+        self.assertEqual(self.generados().count(), 2)
+
+    def test_la_ultima_cita_termina_a_la_hora_final(self):
+        self.generar(desde="08:00", hasta="09:00")
+        horas = list(self.generados().order_by("hora").values_list("hora", flat=True))
+        self.assertEqual(horas, [datetime.time(8, 0), datetime.time(8, 30)])
+
+    def test_cuenta_solo_los_nuevos_cuando_ya_existe_una_parte(self):
         self.generar(desde="09:00", hasta="10:00")
-        self.assertEqual(SlotAgenda.objects.filter(dentista=self.dentista, fecha=MANANA, hora__gte=datetime.time(9, 0)).count(), 3)
+        resultado = self.generar(desde="09:00", hasta="11:00").json()
+        self.assertEqual((resultado["created"], resultado["existing"]), (1, 3))
+
+    def test_rechaza_una_hora_final_que_no_es_posterior(self):
+        self.assertEqual(self.generar(desde="10:00", hasta="10:00").status_code, 400)
+        self.assertEqual(self.generar(desde="10:00", hasta="09:00").status_code, 400)
+
+    def test_si_un_bloque_falla_no_queda_nada_a_medias(self):
+        respuesta = self.generar(desde="17:00", hasta="19:00")
+        self.assertEqual(respuesta.status_code, 400)
+        self.assertFalse(self.generados().exists())
+
+    def test_el_ultimo_inicio_permitido_es_17_30(self):
+        self.assertEqual(self.generar(desde="17:00", hasta="18:00").json()["created"], 2)
 
 
 class ConsultaDeHorarios(Base):

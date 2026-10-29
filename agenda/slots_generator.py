@@ -1,6 +1,8 @@
 import datetime
 from .models import SlotAgenda
 
+PASO = datetime.timedelta(minutes=30)
+
 
 def _parse_time(t):
     if isinstance(t, datetime.time):
@@ -8,22 +10,25 @@ def _parse_time(t):
     return datetime.datetime.strptime(t, '%H:%M').time()
 
 
+def blocks_per_day(desde='08:00', hasta='18:00'):
+    inicio = datetime.datetime.combine(datetime.date.min, _parse_time(desde))
+    fin = datetime.datetime.combine(datetime.date.min, _parse_time(hasta))
+    return max(0, int((fin - inicio) / PASO))
+
+
 def generate_slots_for_day(dentista, fecha, desde='08:00', hasta='18:00', capacidad_default=1):
-    t_desde = _parse_time(desde)
-    t_hasta = _parse_time(hasta)
-    current = datetime.datetime.combine(fecha, t_desde)
-    end = datetime.datetime.combine(fecha, t_hasta)
+    current = datetime.datetime.combine(fecha, _parse_time(desde))
+    end = datetime.datetime.combine(fecha, _parse_time(hasta))
     created = 0
-    while current <= end:
-        hora = current.time()
-        SlotAgenda.objects.get_or_create(
+    while current + PASO <= end:
+        _, nuevo = SlotAgenda.objects.get_or_create(
             dentista=dentista,
             fecha=fecha,
-            hora=hora,
+            hora=current.time(),
             defaults={'capacidad': capacidad_default}
         )
-        created += 1
-        current += datetime.timedelta(minutes=30)
+        created += int(nuevo)
+        current += PASO
     return created
 
 

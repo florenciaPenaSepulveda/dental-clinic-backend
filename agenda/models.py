@@ -82,9 +82,9 @@ class SlotAgenda(models.Model):
 
     def clean(self):
         min_hora = datetime.time(8, 0)
-        max_hora = datetime.time(18, 0)
+        max_hora = datetime.time(17, 30)
         if self.hora < min_hora or self.hora > max_hora:
-            raise ValidationError({'hora': 'La hora debe estar entre 08:00 y 18:00.'})
+            raise ValidationError({'hora': 'La hora de inicio debe estar entre 08:00 y 17:30 (la clínica atiende hasta las 18:00).'})
 
         if self.hora.minute not in (0, 30):
             raise ValidationError({'hora': 'La hora debe estar en bloques de 30 minutos (mm = 00 o 30).'})

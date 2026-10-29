@@ -36,7 +36,7 @@ class SeedDataTests(TestCase):
     def test_genera_slots_para_los_dias_pedidos(self):
         texto = self.ejecutar("--dentistas", "1", "--pacientes", "1", "--generate-slots", "2", "--desde", "08:00", "--hasta", "09:00")
         self.assertIn("Slots creados", texto)
-        self.assertEqual(SlotAgenda.objects.count(), 6)
+        self.assertEqual(SlotAgenda.objects.count(), 4)
 
 
 class GenerateSlotsCommandTests(TestCase):
@@ -45,11 +45,11 @@ class GenerateSlotsCommandTests(TestCase):
 
     def test_genera_un_dia(self):
         call_command("generate_slots", dentista=self.dentista.id, fecha=FECHA, desde="08:00", hasta="09:00", stdout=StringIO())
-        self.assertEqual(SlotAgenda.objects.count(), 3)
+        self.assertEqual(SlotAgenda.objects.count(), 2)
 
     def test_genera_varios_dias(self):
         call_command("generate_slots", dentista=self.dentista.id, fecha=FECHA, dias=2, desde="08:00", hasta="08:30", stdout=StringIO())
-        self.assertEqual(SlotAgenda.objects.count(), 4)
+        self.assertEqual(SlotAgenda.objects.count(), 2)
 
     def test_valida_los_argumentos(self):
         with self.assertRaises(CommandError):

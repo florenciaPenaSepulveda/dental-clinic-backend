@@ -1,6 +1,7 @@
 import datetime
 
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -12,7 +13,7 @@ from .archivos import guardar_reserva, validar_archivos
 from .models import Dentista, SlotAgenda
 from .permissions import EsPersonal, perfil_dentista
 from .serializers import ReservaCreateSerializer, SlotAgendaSerializer, SlotDisponibilidadSerializer
-from .slots_generator import generate_slots_range
+from .slots_generator import blocks_per_day, generate_slots_range
 from .throttles import ReservaThrottle
 
 MAX_DIAS_A_GENERAR = 62
@@ -75,11 +76,16 @@ def generar_slots(request, dentista_id):
     except ValueError:
         return _error('Las horas deben tener el formato HH:MM.')
 
+    if hasta <= desde:
+        return _error('La hora final debe ser posterior a la hora inicial.')
+
     try:
-        creados = generate_slots_range(dentista, fecha, fecha + datetime.timedelta(days=dias - 1), desde=desde, hasta=hasta)
+        with transaction.atomic():
+            creados = generate_slots_range(dentista, fecha, fecha + datetime.timedelta(days=dias - 1), desde=desde, hasta=hasta)
     except ValidationError as error:
         return _error(' '.join(error.messages))
-    return Response({'created': creados}, status=status.HTTP_201_CREATED)
+    existentes = blocks_per_day(desde, hasta) * dias - creados
+    return Response({'created': creados, 'existing': existentes}, status=status.HTTP_201_CREATED)
 
 
 @api_view(['GET'])

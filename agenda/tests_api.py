@@ -77,19 +77,19 @@ class GeneradorDeSlotsTests(TestCase):
     def test_genera_bloques_de_30_minutos_sin_duplicar(self):
         dentista = crear_dentista()
         creados = generate_slots_for_day(dentista, MANANA, desde="08:00", hasta="10:00")
-        self.assertEqual(creados, 5)
-        generate_slots_for_day(dentista, MANANA, desde="08:00", hasta="10:00")
-        self.assertEqual(SlotAgenda.objects.filter(dentista=dentista).count(), 5)
+        self.assertEqual(creados, 4)
+        self.assertEqual(generate_slots_for_day(dentista, MANANA, desde="08:00", hasta="10:00"), 0)
+        self.assertEqual(SlotAgenda.objects.filter(dentista=dentista).count(), 4)
 
     def test_genera_un_rango_de_dias(self):
         dentista = crear_dentista()
         total = generate_slots_range(dentista, MANANA, MANANA + datetime.timedelta(days=2), desde="08:00", hasta="09:00")
-        self.assertEqual(total, 9)
+        self.assertEqual(total, 6)
 
     def test_acepta_objetos_time(self):
         dentista = crear_dentista()
         creados = generate_slots_for_day(dentista, MANANA, desde=datetime.time(8, 0), hasta=datetime.time(8, 30))
-        self.assertEqual(creados, 2)
+        self.assertEqual(creados, 1)
 
 
 class CatalogosApiTests(APITestCase):
@@ -171,11 +171,11 @@ class SlotsApiTests(APITestCase):
         url = f"{BASE}/dentistas/{self.dentista.id}/generar_slots/"
         uno = self.client.post(url, {"fecha": MANANA.isoformat(), "desde": "08:00", "hasta": "09:00"}, format="json")
         self.assertEqual(uno.status_code, 201)
-        self.assertEqual(uno.json()["created"], 3)
+        self.assertEqual(uno.json()["created"], 2)
         varios = self.client.post(
             url, {"fecha": (MANANA + datetime.timedelta(days=5)).isoformat(), "desde": "08:00", "hasta": "08:30", "dias": 2}, format="json"
         )
-        self.assertEqual(varios.json()["created"], 4)
+        self.assertEqual(varios.json()["created"], 2)
 
     def test_generar_slots_valida_los_datos(self):
         url = f"{BASE}/dentistas/{self.dentista.id}/generar_slots/"

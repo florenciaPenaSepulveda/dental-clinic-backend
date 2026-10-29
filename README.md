@@ -16,7 +16,7 @@ python manage.py migrate && python manage.py seed_data --demo
 python manage.py runserver
 ```
 
-API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 179 con 99 % de cobertura.
+API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 184 con 99 % de cobertura.
 
 ## Repositorios del proyecto
 
@@ -73,7 +73,7 @@ python manage.py runserver
 
 La API queda en `http://localhost:8000/agenda/`. El panel de administración está en `/admin/` (crea un usuario con `python manage.py createsuperuser`).
 
-`seed_data --demo` carga un conjunto completo de demostración: 3 regiones, 5 dentistas con distintas especialidades, 7 servicios con precio, 24 pacientes (con RUT válido), unos 750 horarios para los próximos 14 días hábiles y alrededor de 35 reservas, algunas de ellas sobrecupos. Se puede ejecutar varias veces sin duplicar datos. Sin `--demo`, el comando crea datos genéricos (`--dentistas`, `--servicios`, `--pacientes` y `--generate-slots N`).
+`seed_data --demo` carga un conjunto completo de demostración: 3 regiones, 5 dentistas con distintas especialidades, 7 servicios con precio, 24 pacientes (con RUT válido), unos 650 horarios para los próximos 14 días hábiles y alrededor de 35 reservas, algunas de ellas sobrecupos. Se puede ejecutar varias veces sin duplicar datos. Sin `--demo`, el comando crea datos genéricos (`--dentistas`, `--servicios`, `--pacientes` y `--generate-slots N`).
 
 Los correos de los pacientes de demostración usan `example.com`, un dominio reservado: el sistema nunca les envía confirmaciones. Para recibir una confirmación real, registra un paciente con tu propio correo.
 
@@ -121,7 +121,7 @@ Prefijo `/agenda/`.
 |---|---|
 | `GET /slots/` | Horarios desde hoy en adelante |
 | `GET /slots_por_fecha/?fecha=AAAA-MM-DD&dentista_id=1` | Horarios de un día, opcionalmente de un dentista |
-| `POST /dentistas/{id}/generar_slots/` | Genera horarios (`fecha`, `desde`, `hasta`, `dias`) |
+| `POST /dentistas/{id}/generar_slots/` | Genera bloques de 30 minutos entre `desde` y `hasta` (el último termina a la hora final; entre 08:00 y 18:00) durante `dias` días seguidos desde `fecha`. Responde `created` (nuevos) y `existing` (ya existían) |
 | `POST /reservas/` | Crea una reserva en un horario existente (`slot`, o `dentista`, `fecha` y `hora_inicio`), más `paciente`; rechaza horarios que ya pasaron y no crea horarios nuevos |
 | `GET /api/pacientes/buscar/?rut=` | Devuelve solo al paciente con ese RUT (200), 404 si no existe o 400 si el RUT no es válido |
 | `POST /auth/login/` | Inicia sesión (`username` o RUT, `password`) y devuelve un token con el rol (`recepcion`, `dentista` o `paciente`) |
@@ -165,7 +165,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-179 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+184 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 
