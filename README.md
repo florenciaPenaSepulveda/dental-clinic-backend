@@ -30,14 +30,14 @@ python manage.py migrate && python manage.py seed_data --demo
 python manage.py runserver
 ```
 
-API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 204 con 99 % de cobertura.
+API en `http://localhost:8000/agenda/`. Necesitas Python 3.11. Pruebas: 236 con 99 % de cobertura.
 
 ## Funcionalidades
 
 - Catálogos de regiones, dentistas, servicios y pacientes (RUT único por paciente, validado con su dígito verificador y guardado siempre como `12.345.678-5`).
 - Horarios en bloques de 30 minutos entre 08:00 y 18:00, sin duplicados por dentista, fecha y hora.
 - Generación masiva de horarios por día o por rango de días.
-- Reservas transaccionales: si el horario está lleno, se permite **sobrecupo** solo mientras no se superen el límite del horario ni el límite diario del dentista.
+- Reservas transaccionales. Un horario completo solo admite un **sobrecupo** agendado por recepción o por el propio dentista, dentro del límite diario que ellos mismos definen (por defecto o por fecha).
 - Correo de confirmación al paciente (si tiene email); un fallo del correo nunca bloquea la reserva.
 - Duración por servicio: una reserva ocupa los bloques seguidos que necesite su servicio, y cambiar una duración detecta las citas que dejarían de caber.
 - Roles (recepción, dentista y paciente) con permisos por vista y sesiones con vencimiento.
@@ -56,7 +56,7 @@ python -m coverage run manage.py test
 python -m coverage report
 ```
 
-204 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
+236 pruebas con 99 % de cobertura. El flujo de integración continua (`.github/workflows/ci.yml`) exige un mínimo de 80 %.
 
 ## Estructura
 

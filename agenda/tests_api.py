@@ -192,7 +192,7 @@ class ReservasApiTests(APITestCase):
         self.otro = crear_paciente(rut="22.222.222-2", nombre="Marta")
         self.tercero = crear_paciente(rut="33.333.333-3", nombre="Pedro")
         self.servicio = Servicio.objects.create(nombre="Limpieza", duracion_min=30, precio=15000)
-        self.slot = crear_slot(self.dentista, capacidad=1, max_overbook=1)
+        self.slot = crear_slot(self.dentista, capacidad=1)
 
     def reservar(self, paciente, **extra):
         datos = {"slot": self.slot.id, "paciente": paciente.id}
@@ -210,18 +210,19 @@ class ReservasApiTests(APITestCase):
         self.assertEqual(primera, segunda)
         self.assertEqual(Reserva.objects.count(), 1)
 
-    def test_sobrecupo_hasta_el_limite_del_slot(self):
+    def test_un_horario_completo_rechaza_la_reserva_del_publico(self):
         self.reservar(self.paciente)
-        con_sobrecupo = self.reservar(self.otro)
-        self.assertTrue(con_sobrecupo.json()["sobrecupo"])
-        lleno = self.reservar(self.tercero)
-        self.assertEqual(lleno.status_code, 400)
+        rechazo = self.reservar(self.otro)
+        self.assertEqual(rechazo.status_code, 400)
+        self.assertIn("completo", rechazo.json()["detail"])
+        self.assertNotIn("sobrecupo", rechazo.json()["detail"])
+        self.assertEqual(Reserva.objects.count(), 1)
 
-    def test_sobrecupo_respeta_el_limite_diario_del_dentista(self):
-        self.dentista.max_overbook_day = 0
-        self.dentista.save()
+    def test_el_publico_no_puede_pedir_un_sobrecupo(self):
         self.reservar(self.paciente)
-        self.assertEqual(self.reservar(self.otro).status_code, 400)
+        rechazo = self.reservar(self.otro, sobrecupo=True)
+        self.assertEqual(rechazo.status_code, 400)
+        self.assertIn("recepción", rechazo.json()["detail"])
 
     def test_reserva_buscando_el_horario_por_dentista_fecha_y_hora(self):
         crear_slot(self.dentista, hora=datetime.time(11, 0))

@@ -56,11 +56,10 @@ class ReservaCreate(Base):
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_el_correo_indica_cuando_el_servicio_queda_por_definir_y_el_sobrecupo(self):
-        self.slot.max_overbook = 1
-        self.slot.save()
         otro = Paciente.objects.create(rut="11.111.111-1", nombre="Marta", apellido="Ríos")
         Reserva.objects.create(slot=self.slot, paciente=otro)
-        self.reservar()
+        self.client.force_authenticate(self.recepcion)
+        self.reservar(sobrecupo=True)
         self.assertIn("Servicio: Por definir en la consulta", mail.outbox[0].body)
         self.assertIn("sobrecupo", mail.outbox[0].body)
 

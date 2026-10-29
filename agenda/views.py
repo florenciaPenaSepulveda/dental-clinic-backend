@@ -13,6 +13,8 @@ from .archivos import guardar_reserva, validar_archivos
 from .models import Dentista, Servicio, SlotAgenda
 from .permissions import EsPersonal, perfil_dentista
 from .ocupacion import disponibilidad
+from .sobrecupos import MAX_SOBRECUPOS_DIA, con_sobrecupo_disponible, puede_gestionar, resumen_semana, usados
+from .models import SobrecupoDia
 from .serializers import ReservaCreateSerializer, SlotAgendaSerializer, SlotDisponibilidadSerializer
 from .slots_generator import blocks_per_day, generate_slots_range
 from .throttles import ReservaThrottle
@@ -117,5 +119,68 @@ def slots_por_fecha(request):
             return _error('El identificador del servicio debe ser numérico.')
         servicio = Servicio.objects.filter(pk=request.GET['servicio_id']).first()
     lista = list(slots.order_by('fecha', 'hora'))
-    contexto = {'disponibilidad': disponibilidad(lista, servicio)}
+    contexto = {'disponibilidad': disponibilidad(lista, servicio), 'con_sobrecupo': con_sobrecupo_disponible(lista)}
     return Response(SlotDisponibilidadSerializer(lista, many=True, context=contexto).data)
+
+
+def _dentista_del_pedido(request, dato):
+    perfil = perfil_dentista(request.user)
+    if perfil is not None:
+        if dato not in (None, '', perfil.id, str(perfil.id)):
+            return None, Response({'detail': 'Solo puedes gestionar tus propios sobrecupos.'}, status=status.HTTP_403_FORBIDDEN)
+        return perfil, None
+    if dato is None or not str(dato).isdigit():
+        return None, _error('Elige un dentista.')
+    dentista = Dentista.objects.filter(pk=dato).first()
+    if dentista is None:
+        return None, Response({'detail': 'Dentista no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+    return dentista, None
+
+
+@api_view(['GET', 'PUT'])
+@permission_classes([EsPersonal])
+def sobrecupos(request):
+    if request.method == 'GET':
+        dentista, error = _dentista_del_pedido(request, request.query_params.get('dentista'))
+        if error:
+            return error
+        desde = parse_date(request.query_params.get('desde', ''))
+        if desde is None:
+            return _error('Indica la fecha de inicio (desde=AAAA-MM-DD).')
+        return Response(resumen_semana(dentista, desde))
+
+    dentista, error = _dentista_del_pedido(request, request.data.get('dentista'))
+    if error:
+        return error
+    if not puede_gestionar(request.user, dentista.id):
+        return Response({'detail': 'No puedes gestionar los sobrecupos de este dentista.'}, status=status.HTTP_403_FORBIDDEN)
+    cupos = request.data.get('cupos')
+    fecha_texto = request.data.get('fecha')
+    fecha = parse_date(str(fecha_texto)) if fecha_texto else None
+    if fecha_texto and fecha is None:
+        return _error('Formato de fecha inválido. Use YYYY-MM-DD.')
+    if cupos is None and fecha is None:
+        return _error('Indica la cantidad de sobrecupos.')
+    if cupos is not None:
+        try:
+            cupos = int(cupos)
+        except (TypeError, ValueError):
+            return _error('Los sobrecupos deben ser un número entero.')
+        if not 0 <= cupos <= MAX_SOBRECUPOS_DIA:
+            return _error(f'Los sobrecupos deben estar entre 0 y {MAX_SOBRECUPOS_DIA}.')
+
+    if fecha is None:
+        dentista.max_overbook_day = cupos
+        dentista.save(update_fields=['max_overbook_day'])
+        return Response({'por_defecto': cupos})
+
+    if fecha < timezone.localdate():
+        return _error('No se pueden cambiar los sobrecupos de una fecha pasada.')
+    if cupos is None:
+        SobrecupoDia.objects.filter(dentista=dentista, fecha=fecha).delete()
+        return Response({'fecha': fecha, 'cupos': dentista.max_overbook_day, 'personalizado': False})
+    agendados = usados(dentista.id, fecha)
+    if cupos < agendados:
+        return _error(f'Ya hay {agendados} sobrecupo{"s" if agendados != 1 else ""} agendado{"s" if agendados != 1 else ""} ese día: cancélalos o muévelos antes de reducir el límite.')
+    SobrecupoDia.objects.update_or_create(dentista=dentista, fecha=fecha, defaults={'cupos': cupos})
+    return Response({'fecha': fecha, 'cupos': cupos, 'personalizado': True})

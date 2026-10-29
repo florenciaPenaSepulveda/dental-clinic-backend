@@ -44,7 +44,7 @@ class Dentista(models.Model):
     email = models.EmailField(blank=True)
     telefono = models.CharField(max_length=20, blank=True)
     region = models.ForeignKey(Region, on_delete=models.CASCADE, related_name='dentistas', null=True, blank=True)
-    max_overbook_day = models.PositiveIntegerField(default=0, help_text='Máximo de sobrecupos permitidos por día para este dentista')
+    max_overbook_day = models.PositiveIntegerField(default=0, help_text='Sobrecupos que admite por día, salvo que se defina otro valor para una fecha')
     usuario = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='dentista_perfil')
 
     class Meta:
@@ -70,7 +70,6 @@ class SlotAgenda(models.Model):
     fecha = models.DateField()
     hora = models.TimeField()
     capacidad = models.PositiveIntegerField(default=1, help_text='Cuántos pacientes caben en este slot')
-    max_overbook = models.PositiveIntegerField(default=0, help_text='Cuántos sobrecupos adicionales se permiten en este slot')
     creador = models.CharField(max_length=100, blank=True)
 
     class Meta:
@@ -98,6 +97,18 @@ class SlotAgenda(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class SobrecupoDia(models.Model):
+    dentista = models.ForeignKey(Dentista, on_delete=models.CASCADE, related_name='sobrecupos_por_dia')
+    fecha = models.DateField()
+    cupos = models.PositiveSmallIntegerField(help_text='Sobrecupos que admite el dentista esa fecha')
+
+    class Meta:
+        unique_together = ('dentista', 'fecha')
+
+    def __str__(self):
+        return f"{self.dentista} - {self.fecha}: {self.cupos}"
 
 
 class Reserva(models.Model):

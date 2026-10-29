@@ -9,6 +9,7 @@ from django.utils.formats import date_format
 from rest_framework import serializers
 
 from .ocupacion import validar_espacio
+from .sobrecupos import MAX_SOBRECUPOS_DIA, puede_gestionar, validar_sobrecupo
 from .models import ArchivoReserva, Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
 from .utils import es_correo_de_ejemplo, horario_pasado, normalizar_rut
 
@@ -24,14 +25,18 @@ class SlotAgendaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SlotAgenda
-        fields = ('id', 'dentista', 'servicio', 'fecha', 'hora', 'capacidad', 'max_overbook')
+        fields = ('id', 'dentista', 'servicio', 'fecha', 'hora', 'capacidad')
+
+
+def _o_rechazar(funcion, *argumentos, **opciones):
+    try:
+        funcion(*argumentos, **opciones)
+    except ErrorDeDjango as error:
+        raise serializers.ValidationError({'detail': ' '.join(error.messages)})
 
 
 def _validar_espacio(slot, servicio, excluir=None):
-    try:
-        validar_espacio(slot, servicio, excluir=excluir)
-    except ErrorDeDjango as error:
-        raise serializers.ValidationError({'detail': ' '.join(error.messages)})
+    _o_rechazar(validar_espacio, slot, servicio, excluir=excluir)
 
 
 class SlotDisponibilidadSerializer(SlotAgendaSerializer):
@@ -39,9 +44,13 @@ class SlotDisponibilidadSerializer(SlotAgendaSerializer):
     sobrecupos_count = serializers.IntegerField(read_only=True)
     bloqueado = serializers.SerializerMethodField()
     cabe = serializers.SerializerMethodField()
+    sobrecupo_disponible = serializers.SerializerMethodField()
 
     class Meta(SlotAgendaSerializer.Meta):
-        fields = SlotAgendaSerializer.Meta.fields + ('reservas_count', 'sobrecupos_count', 'bloqueado', 'cabe')
+        fields = SlotAgendaSerializer.Meta.fields + ('reservas_count', 'sobrecupos_count', 'bloqueado', 'cabe', 'sobrecupo_disponible')
+
+    def get_sobrecupo_disponible(self, slot):
+        return slot.id in self.context.get('con_sobrecupo', set())
 
     def get_bloqueado(self, slot):
         return self.context.get('disponibilidad', {}).get(slot.id, {}).get('bloqueado', False)
@@ -58,6 +67,7 @@ class ReservaCreateSerializer(serializers.Serializer):
     fecha = serializers.DateField(required=False)
     hora_inicio = serializers.TimeField(required=False)
     motivo = serializers.CharField(required=False, allow_blank=True, max_length=500)
+    sobrecupo = serializers.BooleanField(required=False, default=False)
 
     def validate(self, data):
         slot = data.get('slot')
@@ -72,14 +82,25 @@ class ReservaCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError('Ese horario ya pasó. Elige otro.')
         return data
 
-    def _es_sobrecupo(self, slot):
-        if slot.reservas.count() < slot.capacidad:
-            return False
-        dentista = slot.dentista
-        sobrecupos_del_dia = Reserva.objects.filter(slot__dentista=dentista, slot__fecha=slot.fecha, sobrecupo=True).count()
-        if slot.reservas.filter(sobrecupo=True).count() < slot.max_overbook and sobrecupos_del_dia < dentista.max_overbook_day:
+    def _usuario(self):
+        solicitud = self.context.get('request')
+        return getattr(solicitud, 'user', None)
+
+    def _decidir_tipo(self, slot, pide_sobrecupo):
+        principales = slot.reservas.filter(sobrecupo=False).count()
+        hay_espacio = principales < slot.capacidad
+        gestiona = puede_gestionar(self._usuario(), slot.dentista_id)
+        if pide_sobrecupo:
+            if not gestiona:
+                raise serializers.ValidationError({'detail': 'Solo recepción o el propio dentista pueden agendar sobrecupos.'})
+            if hay_espacio:
+                raise serializers.ValidationError({'detail': 'Ese horario aún tiene espacio: agéndalo como una cita normal.'})
+            _o_rechazar(validar_sobrecupo, slot)
             return True
-        raise serializers.ValidationError({'detail': 'El slot está lleno y no se permiten sobrecupos adicionales.'})
+        if not hay_espacio:
+            sugerencia = ' Puedes agendarlo como sobrecupo.' if gestiona else ''
+            raise serializers.ValidationError({'detail': f'Ese horario ya está completo.{sugerencia}'})
+        return False
 
     def create(self, validated_data):
         slot = validated_data['slot']
@@ -91,7 +112,7 @@ class ReservaCreateSerializer(serializers.Serializer):
                 if existente:
                     self.reutilizada = True
                     return existente
-                sobrecupo = self._es_sobrecupo(slot)
+                sobrecupo = self._decidir_tipo(slot, validated_data.get('sobrecupo', False))
                 if not sobrecupo:
                     _validar_espacio(slot, validated_data.get('servicio'))
                 reserva = Reserva.objects.create(
@@ -155,6 +176,11 @@ class DentistaSerializer(serializers.ModelSerializer):
 
     def get_tiene_cuenta(self, dentista):
         return dentista.usuario_id is not None
+
+    def validate_max_overbook_day(self, valor):
+        if valor > MAX_SOBRECUPOS_DIA:
+            raise serializers.ValidationError(f'Los sobrecupos por día no pueden superar {MAX_SOBRECUPOS_DIA}.')
+        return valor
 
 
 class ServicioSerializer(serializers.ModelSerializer):
@@ -257,12 +283,12 @@ class ReservaActualizarSerializer(serializers.ModelSerializer):
         if slot is not None and slot.id != self.instance.slot_id:
             if Reserva.objects.filter(slot=slot, paciente=self.instance.paciente).exists():
                 raise serializers.ValidationError({'slot': 'El paciente ya tiene una reserva en ese horario.'})
-            if slot.reservas.count() < slot.capacidad:
+            principales = slot.reservas.exclude(pk=self.instance.pk).filter(sobrecupo=False).count()
+            if principales < slot.capacidad:
                 data['sobrecupo'] = False
-            elif slot.reservas.filter(sobrecupo=True).count() < slot.max_overbook:
-                data['sobrecupo'] = True
             else:
-                raise serializers.ValidationError({'slot': 'El horario elegido está lleno.'})
+                _o_rechazar(validar_sobrecupo, slot, excluir=self.instance)
+                data['sobrecupo'] = True
         if 'slot' in data or 'servicio' in data:
             destino = data.get('slot') or self.instance.slot
             servicio = data['servicio'] if 'servicio' in data else self.instance.servicio
@@ -278,7 +304,7 @@ class SlotSemanaSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SlotAgenda
-        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'max_overbook', 'reservas', 'bloqueado', 'conflictos')
+        fields = ('id', 'dentista', 'fecha', 'hora', 'capacidad', 'reservas', 'bloqueado', 'conflictos')
 
     def get_conflictos(self, slot):
         encontrados = self.context.get('conflictos', {})

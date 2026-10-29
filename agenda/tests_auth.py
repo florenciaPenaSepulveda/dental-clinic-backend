@@ -60,7 +60,7 @@ class AccesoPublicoTests(APITestCase):
         cache.clear()
         self.dentista = Dentista.objects.create(nombre="Ana", apellido="Pérez", max_overbook_day=1)
         self.paciente = Paciente.objects.create(rut="12.345.678-5", nombre="Juan", apellido="Soto", email="j@test.cl")
-        self.slot = SlotAgenda.objects.create(dentista=self.dentista, fecha=MANANA, hora=datetime.time(10, 0), capacidad=1, max_overbook=1)
+        self.slot = SlotAgenda.objects.create(dentista=self.dentista, fecha=MANANA, hora=datetime.time(10, 0), capacidad=1)
 
     def test_los_catalogos_son_publicos_pero_no_se_pueden_modificar(self):
         for recurso in ("dentistas", "servicios", "regiones"):

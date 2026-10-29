@@ -50,7 +50,7 @@ class ClinicaBase(APITestCase):
         self.otro_paciente.usuario = User.objects.create_user(self.otro_paciente.rut, password=CLAVE)
         self.otro_paciente.save()
         self.servicio = Servicio.objects.create(nombre="Limpieza", duracion_min=30, precio=35000)
-        self.slot = SlotAgenda.objects.create(dentista=self.dentista, fecha=MANANA, hora=datetime.time(10, 0), capacidad=1, max_overbook=1)
+        self.slot = SlotAgenda.objects.create(dentista=self.dentista, fecha=MANANA, hora=datetime.time(10, 0), capacidad=1)
         self.slot_libre = SlotAgenda.objects.create(dentista=self.dentista, fecha=MANANA, hora=datetime.time(11, 0))
         self.slot_ajeno = SlotAgenda.objects.create(dentista=self.otro_dentista, fecha=MANANA, hora=datetime.time(10, 0))
         self.reserva = Reserva.objects.create(slot=self.slot, paciente=self.paciente, servicio=self.servicio)
@@ -183,19 +183,18 @@ class ActualizarReservaTests(ClinicaBase):
 
     def test_reprograma_como_sobrecupo_cuando_el_horario_ya_tiene_un_paciente(self):
         Reserva.objects.create(slot=self.slot_libre, paciente=self.otro_paciente)
-        self.slot_libre.max_overbook = 1
-        self.slot_libre.save()
         self.como(self.recepcion)
         self.assertEqual(self.client.patch(self.url(), {"slot": self.slot_libre.id}, format="json").status_code, 200)
         self.reserva.refresh_from_db()
         self.assertTrue(self.reserva.sobrecupo)
 
-    def test_rechaza_reprogramar_a_un_horario_lleno(self):
+    def test_rechaza_reprogramar_a_un_horario_lleno_si_el_dentista_no_admite_sobrecupos(self):
         Reserva.objects.create(slot=self.slot_libre, paciente=self.otro_paciente)
+        Dentista.objects.filter(pk=self.dentista.pk).update(max_overbook_day=0)
         self.como(self.recepcion)
         respuesta = self.client.patch(self.url(), {"slot": self.slot_libre.id}, format="json")
         self.assertEqual(respuesta.status_code, 400)
-        self.assertIn("lleno", str(respuesta.json()))
+        self.assertIn("no admite sobrecupos", str(respuesta.json()))
 
     def test_rechaza_reprogramar_donde_el_paciente_ya_tiene_reserva(self):
         Reserva.objects.create(slot=self.slot_libre, paciente=self.paciente)

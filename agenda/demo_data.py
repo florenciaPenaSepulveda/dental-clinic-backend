@@ -8,6 +8,7 @@ from django.db import transaction
 
 from .models import Atencion, Dentista, Paciente, Region, Reserva, Servicio, SlotAgenda
 from .ocupacion import validar_espacio
+from .sobrecupos import validar_sobrecupo
 from .slots_generator import generate_slots_for_day
 from .utils import rut_con_dv
 
@@ -103,8 +104,6 @@ def _crear_agenda(dentistas, hoy):
                 continue
             for desde, hasta in BLOQUES:
                 generate_slots_for_day(dentista, dia, desde=desde, hasta=hasta)
-        if dentista.max_overbook_day:
-            SlotAgenda.objects.filter(dentista=dentista, fecha__gte=hoy).update(max_overbook=1)
 
 
 def _crear_reservas(rng, pacientes, servicios, hoy):
@@ -130,12 +129,14 @@ def _crear_reservas(rng, pacientes, servicios, hoy):
         reservados.append(slot)
         creadas += 1
     for slot in reservados[:5]:
-        sobrecupos_dia = Reserva.objects.filter(slot__dentista=slot.dentista, slot__fecha=slot.fecha, sobrecupo=True).count()
-        if slot.max_overbook and sobrecupos_dia < slot.dentista.max_overbook_day:
-            ocupados = set(slot.reservas.values_list("paciente_id", flat=True))
-            candidatos = [paciente for paciente in pacientes if paciente.id not in ocupados]
-            Reserva.objects.create(slot=slot, paciente=rng.choice(candidatos), servicio=rng.choice(servicios), sobrecupo=True)
-            creadas += 1
+        try:
+            validar_sobrecupo(slot)
+        except ValidationError:
+            continue
+        ocupados = set(slot.reservas.values_list("paciente_id", flat=True))
+        candidatos = [paciente for paciente in pacientes if paciente.id not in ocupados]
+        Reserva.objects.create(slot=slot, paciente=rng.choice(candidatos), servicio=rng.choice(servicios), sobrecupo=True)
+        creadas += 1
     return creadas
 
 

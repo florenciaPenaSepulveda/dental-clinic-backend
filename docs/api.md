@@ -44,6 +44,23 @@ Las observaciones internas de una reserva solo las ven recepción y el dentista;
 
 Crea una cuenta de recepción con `python manage.py createsuperuser`. Las cuentas de dentistas y pacientes las crea recepción desde la aplicación (páginas Equipo y Pacientes, botón Crear cuenta): el sistema genera el usuario (`dr.<apellido>` para dentistas, el RUT para pacientes) y una contraseña temporal que se muestra una sola vez. La contraseña temporal es de un solo uso: hasta que la persona la cambie desde Mi cuenta, la API responde 403 a todo salvo cambiar la contraseña y cerrar sesión, y el login informa `debe_cambiar_clave`. Al registrar una atención, la reserva queda siempre como «Atendida», aunque antes estuviera marcada como «No asistió». `seed_data --demo` crea además el usuario `recepcion`, un usuario `dr.<apellido>` por dentista (por ejemplo `dr.rojas`) y cuentas para tres pacientes (usuario = su RUT), todos con la contraseña `recepcion123` o la de la variable `DEMO_STAFF_PASSWORD`; es solo para demostración. También carga atenciones pasadas para probar el historial clínico.
 
+## Sobrecupos
+
+Un sobrecupo es una cita extra en un horario que ya está completo. Se maneja con un límite por día, no por horario:
+
+- **Valor por defecto:** `max_overbook_day` de cada dentista (0 a 10). Lo cambia recepción en Equipo o el propio dentista desde su agenda.
+- **Valor de una fecha:** se puede fijar otro límite para un día concreto (`SobrecupoDia`), por ejemplo más sobrecupos un viernes o ninguno antes de un feriado. Reemplaza al valor por defecto solo ese día y se puede quitar para volver a él.
+- **Por horario:** un horario completo admite como máximo 1 sobrecupo.
+- **Quién los agenda:** solo recepción o el propio dentista, indicándolo de forma explícita (`sobrecupo: true` en `POST /reservas/`). El público y los pacientes nunca agendan sobrecupos: un horario completo les aparece como completo.
+- **Reglas:** se rechaza si el horario aún tiene espacio, si ya tiene su sobrecupo, si el dentista no admite sobrecupos ese día o si se alcanzó el límite del día. No se puede bajar el límite de una fecha por debajo de los sobrecupos ya agendados, ni cambiar fechas pasadas.
+- **Duración:** un sobrecupo no bloquea los horarios siguientes.
+
+| Método y ruta | Descripción |
+|---|---|
+| `GET /sobrecupos/?dentista=1&desde=AAAA-MM-DD` | Resumen de 7 días: valor por defecto y, por fecha, sobrecupos `permitidos`, `usados` y si el límite es `personalizado`. Un dentista solo ve el suyo |
+| `PUT /sobrecupos/` con `dentista`, `fecha` y `cupos` | Fija el límite de una fecha; `cupos: null` lo quita. Sin `fecha` cambia el valor por defecto |
+| `GET /slots_por_fecha/` | Cada horario indica `sobrecupo_disponible`: está completo, no tiene sobrecupo y queda cupo ese día |
+
 ## Duración de los servicios
 
 Cada servicio tiene una duración (15 a 240 minutos, en múltiplos de 15) que recepción puede editar en `/api/servicios/`. Los horarios son bloques de 30 minutos y una reserva ocupa tantos bloques seguidos como necesite su servicio, redondeando hacia arriba: 30 minutos ocupa 1 bloque, 45 o 60 ocupan 2 y 90 ocupa 3. Los bloques siguientes quedan bloqueados para otras reservas.

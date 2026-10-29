@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 
 from .demo_data import cargar_demo
 from .models import Dentista, Paciente, Reserva, SlotAgenda
+from .sobrecupos import SOBRECUPOS_POR_HORARIO
 from .utils import es_correo_de_ejemplo, rut_con_dv
 
 LUNES = datetime.date(2026, 11, 2)
@@ -55,7 +56,7 @@ class DatosDeDemostracionTests(TestCase):
             reservas = list(slot.reservas.all())
             sobrecupos = [reserva for reserva in reservas if reserva.sobrecupo]
             self.assertLessEqual(len(reservas) - len(sobrecupos), slot.capacidad)
-            self.assertLessEqual(len(sobrecupos), slot.max_overbook)
+            self.assertLessEqual(len(sobrecupos), SOBRECUPOS_POR_HORARIO)
         for dentista in Dentista.objects.all():
             fechas = set(Reserva.objects.filter(slot__dentista=dentista, sobrecupo=True).values_list("slot__fecha", flat=True))
             for fecha in fechas:

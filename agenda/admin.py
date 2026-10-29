@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import ArchivoReserva, Atencion, Paciente, Dentista, Servicio, SlotAgenda, Reserva
+from .models import ArchivoReserva, Atencion, Paciente, Dentista, Servicio, SlotAgenda, Reserva, SobrecupoDia
 
 @admin.register(Paciente)
 class PacienteAdmin(admin.ModelAdmin):
@@ -21,6 +21,11 @@ class SlotAgendaAdmin(admin.ModelAdmin):
     list_display = ('dentista', 'fecha', 'hora', 'capacidad')
     list_filter = ('dentista', 'fecha')
     list_editable = ('capacidad',)
+
+@admin.register(SobrecupoDia)
+class SobrecupoDiaAdmin(admin.ModelAdmin):
+    list_display = ('dentista', 'fecha', 'cupos')
+    list_filter = ('dentista',)
 
 @admin.register(Reserva)
 class ReservaAdmin(admin.ModelAdmin):

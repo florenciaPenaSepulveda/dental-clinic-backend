@@ -1,5 +1,5 @@
 from django.urls import path, include
-from .views import SlotsDisponiblesList, CrearReserva, generar_slots
+from .views import SlotsDisponiblesList, CrearReserva, generar_slots, sobrecupos
 from .views import slots_por_fecha
 from . import auth_views, views_clinica
 from rest_framework.routers import DefaultRouter
@@ -18,6 +18,7 @@ urlpatterns = [
     path('dentistas/<int:dentista_id>/generar_slots/', generar_slots, name='generar-slots'),
     path('slots_por_fecha/', slots_por_fecha, name='slots-por-fecha'),
     path('semana/', views_clinica.semana, name='semana'),
+    path('sobrecupos/', sobrecupos, name='sobrecupos'),
     path('mi/historial/', views_clinica.mi_historial, name='mi-historial'),
     path('archivos/<int:archivo_id>/', views_clinica.archivo, name='archivo'),
     path('auth/login/', auth_views.login, name='auth-login'),
