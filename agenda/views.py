@@ -33,7 +33,11 @@ class CrearReserva(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         archivos = request.FILES.getlist('archivos')
         validar_archivos(archivos)
-        serializer = self.get_serializer(data=request.data)
+        datos = request.data.copy()
+        perfil = getattr(request.user, 'paciente_perfil', None)
+        if perfil is not None:
+            datos['paciente'] = perfil.id
+        serializer = self.get_serializer(data=datos)
         serializer.is_valid(raise_exception=True)
         reserva = guardar_reserva(serializer, archivos)
         return Response({'id': reserva.id, 'sobrecupo': reserva.sobrecupo}, status=status.HTTP_201_CREATED)

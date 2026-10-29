@@ -387,6 +387,29 @@ class HistorialTests(ClinicaBase):
         self.assertIn("Pulpitis", str(historial))
 
 
+class ReservaDeUnPacienteConSesionTests(ClinicaBase):
+    def reservar(self, **extra):
+        datos = {"slot": self.slot_libre.id, "paciente": self.otro_paciente.id}
+        datos.update(extra)
+        return self.client.post(f"{BASE}/reservas/", datos, format="json")
+
+    def test_un_paciente_con_sesion_siempre_reserva_a_su_nombre(self):
+        self.como(self.paciente.usuario)
+        respuesta = self.reservar()
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(Reserva.objects.get(pk=respuesta.json()["id"]).paciente, self.paciente)
+
+    def test_sin_sesion_se_respeta_el_paciente_indicado(self):
+        respuesta = self.reservar()
+        self.assertEqual(respuesta.status_code, 201)
+        self.assertEqual(Reserva.objects.get(pk=respuesta.json()["id"]).paciente, self.otro_paciente)
+
+    def test_el_personal_reserva_a_nombre_del_paciente_indicado(self):
+        self.como(self.recepcion)
+        respuesta = self.reservar()
+        self.assertEqual(Reserva.objects.get(pk=respuesta.json()["id"]).paciente, self.otro_paciente)
+
+
 class ActivarCuentaTests(ClinicaBase):
     def setUp(self):
         super().setUp()
